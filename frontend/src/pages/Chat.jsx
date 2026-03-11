@@ -6,6 +6,8 @@ import { io } from "socket.io-client";
 // Ensure we connect to the correct backend URL
 const socket = io(import.meta.env.VITE_API_BASE_URL || "http://localhost:5000", {
     autoConnect: false,
+    withCredentials: true,
+    transports: ['websocket', 'polling']
 });
 
 const Chat = () => {
