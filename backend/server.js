@@ -15,32 +15,34 @@ const app = express();
 const server = http.createServer(app);
 
 // Handle multiple origins and strip trailing slashes
-const frontendURL = process.env.FRONTEND_URL || "http://localhost:5173";
+const frontendURL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 const allowedOrigins = [
-  frontendURL.replace(/\/$/, ""), // URL without trailing slash
+  frontendURL,
+  "https://lifelink-connect.vercel.app", // Explicitly add production URL
   "http://localhost:5173",
   "http://localhost:5174"
 ];
 
+console.log("Allowed Origins:", allowedOrigins);
+
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
+  allowEIO3: true // Allow older clients if any
 });
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
       callback(null, true);
     } else {
+      console.log("Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
