@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
+import { io } from "socket.io-client";
+
+const SOCKET_URL = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace("/api", "")
+    : "http://localhost:5000";
 
 const MyRequests = () => {
     const navigate = useNavigate();
@@ -20,6 +25,24 @@ const MyRequests = () => {
 
     useEffect(() => {
         fetchRequests();
+
+        // Connect to socket and refresh when a donor accepts our request
+        const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        const myId = storedUser?._id || storedUser?.id || "";
+
+        socket.on("notification_update", (data) => {
+            if (
+                data.type === "donor_accepted" &&
+                data.receiver === myId
+            ) {
+                fetchRequests();
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
     }, []);
 
     const handleClose = async (requestId) => {

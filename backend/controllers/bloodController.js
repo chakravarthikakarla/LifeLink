@@ -2,8 +2,7 @@ const BloodRequest = require("../models/BloodRequest");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
 const Message = require("../models/Message");
-
-// Create blood request + send alerts + email matching donors
+const nodemailer = require("nodemailer");
 const createBloodRequest = async (req, res) => {
   try {
     const {
@@ -69,7 +68,7 @@ const createBloodRequest = async (req, res) => {
 
     // Send email notification to each matching donor
     if (matchingDonors.length > 0) {
-      const nodemailer = require("nodemailer");
+      console.log(`[BloodRequest] Found ${matchingDonors.length} matching donors. Preparing to send emails...`);
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -115,13 +114,17 @@ const createBloodRequest = async (req, res) => {
             </div>
           `,
         };
-        return transporter.sendMail(mailOptions).catch((err) => {
-          console.error(`Failed to email donor ${donor.email}:`, err.message);
-        });
+        return transporter.sendMail(mailOptions)
+          .then((info) => console.log(`✅ Blood Request email sent to ${donor.email}: ${info.messageId}`))
+          .catch((err) => {
+            console.error(`❌ Failed to email donor ${donor.email}:`, err.message);
+          });
       });
 
       // Fire-and-forget, don't block the response
       Promise.all(emailPromises);
+    } else {
+      console.log(`[BloodRequest] No matching donors found for blood group ${bloodGroup}. Emails skipped.`);
     }
 
     res.status(201).json({
@@ -138,56 +141,58 @@ const createBloodRequest = async (req, res) => {
 // Get current user's blood requests with accepted donor details and unread message counts
 const getMyRequests = async (req, res) => {
   try {
-    // DIAGNOSTIC LOGGING
-    const fs = require('fs');
-    fs.appendFileSync('c:/Projects/WEB/LifeLink/backend/debug.log', `[${new Date().toISOString()}] getMyRequests for user: ${req.user._id}\n`);
-
     // Get all blood requests made by this user
     const requests = await BloodRequest.find({
       requester: req.user._id,
     }).sort({ createdAt: -1 });
 
-    fs.appendFileSync('c:/Projects/WEB/LifeLink/backend/debug.log', `[${new Date().toISOString()}] Found ${requests.length} requests\n`);
-
     // For each request, find the alert and get accepted donors
     const requestsWithDonors = await Promise.all(
       requests.map(async (request) => {
-        const alert = await Alert.findOne({
-          bloodRequest: request._id,
-        }).populate({
-          path: "acceptedDonors.user",
-          select: "email profile.name profile.phone profile.bloodGroup profile.gender",
-        });
+        try {
+          const alert = await Alert.findOne({
+            bloodRequest: request._id,
+          }).populate({
+            path: "acceptedDonors.user",
+            select: "email profile.name profile.phone profile.bloodGroup profile.gender",
+          });
 
-        const reqObj = request.toObject();
+          const reqObj = request.toObject();
 
-        // Count unread messages for each donor
-        const donorsData = alert ? alert.acceptedDonors : [];
-        reqObj.acceptedDonors = await Promise.all(
-          donorsData
-            .sort((a, b) => new Date(a.acceptedAt) - new Date(b.acceptedAt))
-            .map(async (d) => {
-              const unreadCount = await Message.countDocuments({
-                bloodRequest: request._id,
-                sender: d.user?._id,
-                receiver: req.user._id,
-                isRead: false
-              });
+          // Count unread messages for each donor
+          const donorsData = alert ? alert.acceptedDonors : [];
+          reqObj.acceptedDonors = await Promise.all(
+            donorsData
+              .filter((d) => d.user) // skip entries with missing user reference
+              .sort((a, b) => new Date(a.acceptedAt) - new Date(b.acceptedAt))
+              .map(async (d) => {
+                const unreadCount = await Message.countDocuments({
+                  bloodRequest: request._id,
+                  sender: d.user?._id,
+                  receiver: req.user._id,
+                  isRead: false
+                });
 
-              return {
-                _id: d.user?._id,
-                name: d.user?.profile?.name || "Unknown",
-                email: d.user?.email || "",
-                phone: d.user?.profile?.phone || "",
-                bloodGroup: d.user?.profile?.bloodGroup || "",
-                gender: d.user?.profile?.gender || "",
-                acceptedAt: d.acceptedAt,
-                unreadCount
-              };
-            })
-        );
+                return {
+                  _id: d.user?._id,
+                  name: d.user?.profile?.name || "Unknown",
+                  email: d.user?.email || "",
+                  phone: d.user?.profile?.phone || "",
+                  bloodGroup: d.user?.profile?.bloodGroup || "",
+                  gender: d.user?.profile?.gender || "",
+                  acceptedAt: d.acceptedAt,
+                  unreadCount
+                };
+              })
+          );
 
-        return reqObj;
+          return reqObj;
+        } catch (innerErr) {
+          console.error(`Error processing request ${request._id}:`, innerErr);
+          const reqObj = request.toObject();
+          reqObj.acceptedDonors = [];
+          return reqObj;
+        }
       })
     );
 

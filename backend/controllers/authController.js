@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
-
+const nodemailer = require("nodemailer");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // helper function to generate 6-digit OTP
@@ -46,7 +46,6 @@ exports.register = async (req, res) => {
     });
 
     // Send OTP via Email
-    const nodemailer = require("nodemailer");
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -73,9 +72,11 @@ exports.register = async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions).catch((err) => {
-      console.error("Failed to send registration OTP email:", err);
-    });
+    transporter.sendMail(mailOptions)
+      .then((info) => console.log(`✅ Registration OTP email sent to ${email}: ${info.messageId}`))
+      .catch((err) => {
+        console.error("❌ Failed to send registration OTP email:", err);
+      });
 
     res.status(201).json({
       message: "User registered successfully. Verify OTP.",
@@ -145,9 +146,11 @@ exports.verifyOtp = async (req, res) => {
     };
 
     // Send email asynchronously (don't block the response)
-    transporter.sendMail(mailOptions).catch((err) => {
-      console.error("Failed to send welcome email:", err);
-    });
+    transporter.sendMail(mailOptions)
+      .then((info) => console.log(`✅ Welcome email sent to ${user.email}: ${info.messageId}`))
+      .catch((err) => {
+        console.error("❌ Failed to send welcome email:", err);
+      });
 
     res.status(200).json({
       message: "OTP verified successfully. You can now login.",
@@ -240,7 +243,6 @@ exports.resendOtp = async (req, res) => {
     await user.save();
 
     // Send OTP via Email
-    const nodemailer = require("nodemailer");
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -267,9 +269,11 @@ exports.resendOtp = async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions).catch((err) => {
-      console.error("Failed to resend registration OTP email:", err);
-    });
+    transporter.sendMail(mailOptions)
+      .then((info) => console.log(`✅ Resend OTP email sent to ${user.email}: ${info.messageId}`))
+      .catch((err) => {
+        console.error("❌ Failed to resend registration OTP email:", err);
+      });
 
     res.status(200).json({
       message: "OTP resent successfully",
@@ -311,7 +315,7 @@ exports.googleLogin = async (req, res) => {
       });
 
       // Send Registration Success Email
-      const transporter = require("nodemailer").createTransport({
+      const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user: process.env.EMAIL_USER,
@@ -335,8 +339,10 @@ exports.googleLogin = async (req, res) => {
         `,
       };
 
-      transporter.sendMail(mailOptions).catch((err) => {
-        console.error("Failed to send welcome email:", err);
+      transporter.sendMail(mailOptions)
+        .then((info) => console.log(`✅ Google Register Welcome email sent to ${user.email}: ${info.messageId}`))
+        .catch((err) => {
+        console.error("❌ Failed to send welcome email:", err);
       });
 
       return res.status(201).json({
@@ -357,7 +363,7 @@ exports.googleLogin = async (req, res) => {
       });
 
       // Send Registration Success Email
-      const transporter = require("nodemailer").createTransport({
+      const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
           user: process.env.EMAIL_USER,
@@ -381,8 +387,10 @@ exports.googleLogin = async (req, res) => {
         `,
       };
 
-      transporter.sendMail(mailOptions).catch((err) => {
-        console.error("Failed to send welcome email:", err);
+      transporter.sendMail(mailOptions)
+        .then((info) => console.log(`✅ Google Login Fallback Register email sent to ${user.email}: ${info.messageId}`))
+        .catch((err) => {
+        console.error("❌ Failed to send welcome email:", err);
       });
     }
 
@@ -422,8 +430,6 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-const nodemailer = require("nodemailer");
-
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -462,7 +468,8 @@ exports.forgotPassword = async (req, res) => {
       text: `Your OTP for password reset is: ${otp}. It is valid for 10 minutes.`,
     };
 
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Forgot password email sent to ${email}: ${info.messageId}`);
 
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (error) {

@@ -75,6 +75,15 @@ const acceptAlert = async (req, res) => {
 
     await alert.save();
 
+    // Notify the requester via Socket.io so their MyRequests page auto-refreshes
+    const io = req.app.get("io");
+    if (io && alert.bloodRequest?.requester) {
+      io.emit("notification_update", {
+        type: "donor_accepted",
+        receiver: alert.bloodRequest.requester.toString(),
+      });
+    }
+
     // Auto-close if accepted donors count >= required units
     const requiredUnits = alert.bloodRequest.units || 1;
     if (alert.acceptedDonors.length >= requiredUnits) {
