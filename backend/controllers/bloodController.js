@@ -107,7 +107,7 @@ const createBloodRequest = async (req, res) => {
                 <p><strong style="color: ${urgencyColor};">Urgency: ${urgency || "Normal"}</strong></p>
               </div>
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/alerts" style="background-color: #d9534f; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Alert & Respond</a>
+                <a href="${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')}/alerts" style="background-color: #d9534f; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Alert & Respond</a>
               </div>
               <p>Please log in to LifeLink to view full details and accept this request.</p>
               <p>Every drop counts. Thank you for your noble service! ❤️</p>
