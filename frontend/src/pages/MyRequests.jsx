@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL
-    ? import.meta.env.VITE_API_URL.replace("/api", "")
-    : "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const socket = io(SOCKET_URL, {
+  withCredentials: true,
+  transports: ["websocket"]
+});
 
 const MyRequests = () => {
     const navigate = useNavigate();
@@ -26,22 +28,23 @@ const MyRequests = () => {
     useEffect(() => {
         fetchRequests();
 
-        // Connect to socket and refresh when a donor accepts our request
-        const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
         const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        // Navbar saves _id or id depending on the login flow (Google vs Form)
         const myId = storedUser?._id || storedUser?.id || "";
+        console.log("MyRequests listening for notifications for ID:", myId);
 
-        socket.on("notification_update", (data) => {
-            if (
-                data.type === "donor_accepted" &&
-                data.receiver === myId
-            ) {
+        const handleNotification = (data) => {
+            console.log("MyRequests received socket event:", data);
+            if (data.type === "donor_accepted" && data.receiver === myId) {
+                console.log("Match found! Refreshing requests...");
                 fetchRequests();
             }
-        });
+        };
+
+        socket.on("notification_update", handleNotification);
 
         return () => {
-            socket.disconnect();
+            socket.off("notification_update", handleNotification);
         };
     }, []);
 
