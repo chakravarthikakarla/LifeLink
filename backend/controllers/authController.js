@@ -1,18 +1,17 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// helper function to generate 4-digit OTP
+// Generate OTP
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
 };
 
-// helper function to send welcome email
+// Send welcome email
 const sendWelcomeEmail = async (email, name) => {
   try {
     await sendEmail(
@@ -29,7 +28,7 @@ const sendWelcomeEmail = async (email, name) => {
       `
     );
   } catch (err) {
-    console.log("Welcome email failed");
+    console.log("Welcome email failed:", err.message);
   }
 };
 
@@ -47,9 +46,10 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    let user;
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    let user;
 
     if (existingUser && !existingUser.isVerified) {
       existingUser.otp = otp;
@@ -58,12 +58,13 @@ exports.register = async (req, res) => {
       user = await existingUser.save();
     } else {
       const hashedPassword = await bcrypt.hash(password, 10);
+
       user = await User.create({
         email,
         password: hashedPassword,
         otp,
         otpExpiry,
-        isVerified: false,
+        isVerified: false
       });
     }
 
@@ -80,15 +81,18 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       message: "User registered. Verify OTP.",
-      userId: user._id,
+      userId: user._id
     });
+
   } catch (error) {
+    console.log("Register error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.verifyOtp = async (req, res) => {
   try {
+
     const { userId, otp } = req.body;
 
     const user = await User.findById(userId);
@@ -112,15 +116,18 @@ exports.verifyOtp = async (req, res) => {
     await sendWelcomeEmail(user.email, user.profile?.name);
 
     res.status(200).json({
-      message: "OTP verified successfully. You can now login.",
+      message: "OTP verified successfully. You can now login."
     });
+
   } catch (error) {
+    console.log("Verify OTP error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.login = async (req, res) => {
   try {
+
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
@@ -142,16 +149,19 @@ exports.login = async (req, res) => {
       token,
       user: {
         id: user._id,
-        email: user.email,
-      },
+        email: user.email
+      }
     });
-  } catch {
+
+  } catch (error) {
+    console.log("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.resendOtp = async (req, res) => {
   try {
+
     const { userId } = req.body;
 
     const user = await User.findById(userId);
@@ -173,15 +183,18 @@ exports.resendOtp = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "OTP resent successfully",
+      message: "OTP resent successfully"
     });
-  } catch {
+
+  } catch (error) {
+    console.log("Resend OTP error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.forgotPassword = async (req, res) => {
   try {
+
     const { email } = req.body;
 
     const user = await User.findOne({ email });
@@ -203,16 +216,18 @@ exports.forgotPassword = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "OTP sent to your email",
+      message: "OTP sent to your email"
     });
+
   } catch (error) {
-    console.log(error);
+    console.log("Forgot password error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 exports.resetPassword = async (req, res) => {
   try {
+
     const { email, otp, newPassword } = req.body;
 
     const user = await User.findOne({ email });
@@ -228,15 +243,18 @@ exports.resetPassword = async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
+
     user.otp = undefined;
     user.otpExpiry = undefined;
 
     await user.save();
 
     res.status(200).json({
-      message: "Password reset successful",
+      message: "Password reset successful"
     });
-  } catch {
+
+  } catch (error) {
+    console.log("Reset password error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
