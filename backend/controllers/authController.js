@@ -6,9 +6,41 @@ const { OAuth2Client } = require("google-auth-library");
 const nodemailer = require("nodemailer");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// helper function to generate 6-digit OTP
+// helper function to generate 4-digit OTP
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
+};
+
+// helper function to send welcome email
+const sendWelcomeEmail = async (email, name) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Welcome to LifeLink! Registration Successful",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #d9534f;">Welcome to LifeLink!</h2>
+          <p>Dear ${name || "User"},</p>
+          <p>Congratulations! Your account has been successfully verified and your registration is complete.</p>
+          <p>Thank you for joining our noble cause. Your participation in LifeLink can help save lives by connecting blood donors with those in need. Every drop counts!</p>
+          <p>You can now log in to your account and complete your profile, request blood, or register as a donor.</p>
+          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
+        </div>
+      `,
+    };
+    await transporter.sendMail(mailOptions);
+  } catch (err) {
+    // Error ignored
+  }
 };
 
 exports.register = async (req, res) => {
@@ -25,25 +57,29 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    if (existingUser && !existingUser.isVerified) {
-      return res.status(400).json({
-        message: "OTP already sent. Please verify or resend OTP.",
-      });
-    }
-
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    let user;
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
-    const user = await User.create({
-      email,
-      password: hashedPassword,
-      otp,
-      otpExpiry,
-      isVerified: false,
-    });
+    if (existingUser && !existingUser.isVerified) {
+      // Re-use existing unverified user but update OTP
+      existingUser.otp = otp;
+      existingUser.otpExpiry = otpExpiry;
+      if (password) {
+        existingUser.password = await bcrypt.hash(password, 10);
+      }
+      user = await existingUser.save();
+    } else {
+      // Create new user
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user = await User.create({
+        email,
+        password: hashedPassword,
+        otp,
+        otpExpiry,
+        isVerified: false,
+      });
+    }
 
     // Send OTP via Email
     const transporter = nodemailer.createTransport({
@@ -72,18 +108,17 @@ exports.register = async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions)
-      .then((info) => console.log(`✅ Registration OTP email sent to ${email}: ${info.messageId}`))
-      .catch((err) => {
-        console.error("❌ Failed to send registration OTP email:", err);
-      });
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+    }
 
     res.status(201).json({
-      message: "User registered successfully. Verify OTP.",
+      message: existingUser ? "OTP resent. Verify OTP." : "User registered successfully. Verify OTP.",
       userId: user._id,
     });
   } catch (error) {
-    console.error("Register error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -120,43 +155,13 @@ exports.verifyOtp = async (req, res) => {
 
     await user.save();
 
-    // Send Registration Success Email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD,
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: "Welcome to LifeLink! Registration Successful",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #d9534f;">Welcome to LifeLink!</h2>
-          <p>Dear User,</p>
-          <p>Congratulations! Your email has been successfully verified and your registration is complete.</p>
-          <p>Thank you for joining our noble cause. Your participation in LifeLink can help save lives by connecting blood donors with those in need. Every drop counts!</p>
-          <p>You can now log in to your account and complete your profile, request blood, or register as a donor.</p>
-          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-        </div>
-      `,
-    };
-
-    // Send email asynchronously (don't block the response)
-    transporter.sendMail(mailOptions)
-      .then((info) => console.log(`✅ Welcome email sent to ${user.email}: ${info.messageId}`))
-      .catch((err) => {
-        console.error("❌ Failed to send welcome email:", err);
-      });
+    // Send Registration Success Email (Standardized helper)
+    await sendWelcomeEmail(user.email, user.profile?.name);
 
     res.status(200).json({
       message: "OTP verified successfully. You can now login.",
     });
   } catch (error) {
-    console.error("Verify OTP error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -211,7 +216,6 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -269,17 +273,16 @@ exports.resendOtp = async (req, res) => {
       `,
     };
 
-    transporter.sendMail(mailOptions)
-      .then((info) => console.log(`✅ Resend OTP email sent to ${user.email}: ${info.messageId}`))
-      .catch((err) => {
-        console.error("❌ Failed to resend registration OTP email:", err);
-      });
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (err) {
+      return res.status(500).json({ message: "Failed to send OTP email. Please try again." });
+    }
 
     res.status(200).json({
       message: "OTP resent successfully",
     });
   } catch (error) {
-    console.error("Resend OTP error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -314,36 +317,8 @@ exports.googleLogin = async (req, res) => {
         },
       });
 
-      // Send Registration Success Email
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_APP_PASSWORD,
-        },
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: user.email,
-        subject: "Welcome to LifeLink! Registration Successful",
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #d9534f;">Welcome to LifeLink!</h2>
-            <p>Dear ${name},</p>
-            <p>Congratulations! Your Google account has been successfully linked and your registration is complete.</p>
-            <p>Thank you for joining our noble cause. Your participation in LifeLink can help save lives by connecting blood donors with those in need. Every drop counts!</p>
-            <p>You can now go to your dashboard, request blood, or register as a donor.</p>
-            <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-          </div>
-        `,
-      };
-
-      transporter.sendMail(mailOptions)
-        .then((info) => console.log(`✅ Google Register Welcome email sent to ${user.email}: ${info.messageId}`))
-        .catch((err) => {
-        console.error("❌ Failed to send welcome email:", err);
-      });
+      // Send Registration Success Email (Standardized helper)
+      await sendWelcomeEmail(user.email, name);
 
       return res.status(201).json({
         message: "Registration successful. Please login to continue.",
@@ -362,36 +337,8 @@ exports.googleLogin = async (req, res) => {
         },
       });
 
-      // Send Registration Success Email
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_APP_PASSWORD,
-        },
-      });
-
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: user.email,
-        subject: "Welcome to LifeLink! Registration Successful",
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #d9534f;">Welcome to LifeLink!</h2>
-            <p>Dear ${name},</p>
-            <p>Congratulations! Your Google account has been successfully linked and your registration is complete.</p>
-            <p>Thank you for joining our noble cause. Your participation in LifeLink can help save lives by connecting blood donors with those in need. Every drop counts!</p>
-            <p>You can now go to your dashboard, request blood, or register as a donor.</p>
-            <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-          </div>
-        `,
-      };
-
-      transporter.sendMail(mailOptions)
-        .then((info) => console.log(`✅ Google Login Fallback Register email sent to ${user.email}: ${info.messageId}`))
-        .catch((err) => {
-        console.error("❌ Failed to send welcome email:", err);
-      });
+      // Send Registration Success Email (Standardized helper)
+      await sendWelcomeEmail(user.email, name);
     }
 
     // If user exists but hasn't linked Google
@@ -425,7 +372,6 @@ exports.googleLogin = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Google verify error:", error);
     res.status(400).json({ message: "Invalid Google Token" });
   }
 };
@@ -468,12 +414,10 @@ exports.forgotPassword = async (req, res) => {
       text: `Your OTP for password reset is: ${otp}. It is valid for 10 minutes.`,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Forgot password email sent to ${email}: ${info.messageId}`);
+    await transporter.sendMail(mailOptions);
 
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (error) {
-    console.error("Forgot password error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -511,7 +455,6 @@ exports.resetPassword = async (req, res) => {
 
     res.status(200).json({ message: "Password reset successful" });
   } catch (error) {
-    console.error("Reset password error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,6 +1,9 @@
-import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Skeleton from "../components/Skeleton";
 import axios from "../services/api";
+import { toast } from "react-hot-toast";
+import Modal from "../components/Modal";
 
 const AboutRow = ({ label, value }) => (
   <div className="flex justify-between py-2">
@@ -22,6 +25,13 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    title: "",
+    message: "",
+    type: "confirm",
+    onConfirm: () => { },
+  });
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -29,7 +39,7 @@ const Dashboard = () => {
         const res = await axios.get("/user/profile");
         setUser(res.data);
       } catch (error) {
-        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
         navigate("/login");
       }
     };
@@ -39,8 +49,17 @@ const Dashboard = () => {
 
   if (!user) {
     return (
-      <div className="min-h-[calc(100vh-96px)] flex items-center justify-center">
-        Loading dashboard...
+      <div className="bg-gray-50 min-h-[calc(100vh-96px)] px-6 md:px-14 pt-6 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 space-y-5">
+            <Skeleton height="6rem" className="rounded-xl" />
+            <Skeleton height="20rem" className="rounded-xl" />
+          </div>
+          <div className="space-y-5">
+            <Skeleton height="15rem" className="rounded-xl" />
+            <Skeleton height="15rem" className="rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -143,18 +162,25 @@ const Dashboard = () => {
                   </button>
                   {profile.photo && (
                     <button
-                      onClick={async () => {
-                        if (window.confirm("Are you sure you want to remove your profile photo?")) {
-                          try {
-                            const res = await axios.put("/user/profile", { photo: "" });
-                            setUser({ ...user, profile: res.data.user.profile });
-                            setShowImageModal(false);
-                            alert("Image removed successfully");
-                          } catch (err) {
-                            console.error("Photo removal failed", err);
-                            alert("Failed to remove photo.");
-                          }
-                        }
+                      onClick={() => {
+                        setModalConfig({
+                          title: "Remove Photo",
+                          message: "Are you sure you want to remove your profile photo?",
+                          type: "confirm",
+                          onConfirm: async () => {
+                            try {
+                              const res = await axios.put("/user/profile", { photo: "" });
+                              setUser({ ...user, profile: res.data.user.profile });
+                              setShowImageModal(false);
+                              setModalOpen(false);
+                              toast.success("Image removed successfully");
+                            } catch (err) {
+                              console.error("Photo removal failed", err);
+                              toast.error("Failed to remove photo.");
+                            }
+                          },
+                        });
+                        setModalOpen(true);
                       }}
                       className="flex-1 py-4 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
                     >
@@ -177,7 +203,7 @@ const Dashboard = () => {
                     if (!file) return;
 
                     if (file.size > 5 * 1024 * 1024) {
-                      alert("File size should be less than 5MB");
+                      toast.error("File size should be less than 5MB");
                       return;
                     }
 
@@ -189,10 +215,10 @@ const Dashboard = () => {
                         const res = await axios.put("/user/profile", { photo: base64Photo });
                         setUser({ ...user, profile: res.data.user.profile });
                         setShowImageModal(false);
-                        alert("Image uploaded successfully");
+                        toast.success("Image uploaded successfully");
                       } catch (err) {
                         console.error("Photo upload failed", err);
-                        alert("Failed to upload photo.");
+                        toast.error("Failed to upload photo.");
                       }
                     };
                   }}
@@ -285,6 +311,15 @@ const Dashboard = () => {
 
         </div>
       </div>
+
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        onConfirm={modalConfig.onConfirm}
+      />
     </div>
   );
 };

@@ -44,6 +44,9 @@ const bloodRequestSchema = new mongoose.Schema(
       type: String,
       default: "active",
     },
+    closedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

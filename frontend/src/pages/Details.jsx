@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
+import { toast } from "react-hot-toast";
 
 /* Tailwind input class */
 const inputClass =
@@ -90,15 +91,15 @@ const Details = () => {
   const handleSubmit = async () => {
     // Basic Validation
     if (!form.name || !form.phone || !form.address || !form.pincode || !form.dob || !form.bloodGroup || !form.gender) {
-      alert("Please fill out all required fields.");
+      toast.error("Please fill out all required fields.");
       return;
     }
     if (form.phone.length !== 10 || !/^\d+$/.test(form.phone)) {
-      alert("Please enter a valid 10-digit phone number.");
+      toast.error("Please enter a valid 10-digit phone number.");
       return;
     }
     if (form.pincode.length !== 6 || !/^\d+$/.test(form.pincode)) {
-      alert("Please enter a valid 6-digit pincode.");
+      toast.error("Please enter a valid 6-digit pincode.");
       return;
     }
 
@@ -108,9 +109,10 @@ const Details = () => {
         availableToDonate: form.availableToDonate === "true",
       };
       await axios.put("/user/profile", submitData);
+      toast.success("Profile updated successfully!");
       navigate("/");
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to update profile");
+      toast.error(error.response?.data?.message || "Failed to update profile");
     }
   };
 

@@ -1,9 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import Skeleton from "./Skeleton";
 import axios from "../services/api";
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem("token");
+  const { token, logout } = useAuth();
   const location = useLocation();
   const [isAuthorized, setIsAuthorized] = useState(null);
 
@@ -25,7 +27,7 @@ const ProtectedRoute = ({ children }) => {
         }
       } catch (error) {
         console.error("Profile verification failed", error);
-        localStorage.removeItem("token");
+        logout();
         setIsAuthorized(false);
       }
     };
@@ -37,9 +39,16 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Show a blank/loading state while verifying to prevent flash of protected content
+  // Show a skeleton state while verifying to prevent flash of protected content
   if (isAuthorized === null) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center p-20">
+        <div className="w-full max-w-4xl space-y-4">
+          <Skeleton height="3rem" width="40%" />
+          <Skeleton height="20rem" />
+        </div>
+      </div>
+    );
   }
 
   // Redirect to details if profile is incomplete

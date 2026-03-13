@@ -1,22 +1,16 @@
-import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
 import axios from "../services/api";
-import { io } from "socket.io-client";
-
-// Ensure we connect to the correct backend URL
-const socket = io(import.meta.env.VITE_API_BASE_URL || "http://localhost:5000", {
-    autoConnect: false,
-    withCredentials: true,
-    transports: ['websocket']
-});
+import socket from "../socket";
 
 const Chat = () => {
     const { requestId, donorId } = useParams();
+    const { user: currentUser } = useAuth();
     const navigate = useNavigate();
-
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
-    const [currentUser, setCurrentUser] = useState(null);
     const [targetUserId, setTargetUserId] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -27,22 +21,17 @@ const Chat = () => {
     const roomId = `${requestId}_${donorId}`;
 
     useEffect(() => {
-        const fetchUserAndMessages = async () => {
+        const fetchTargetAndMessages = async () => {
             try {
-                // 1. Get current user
-                const resUser = await axios.get("/user/profile");
-                setCurrentUser(resUser.data);
+                if (!currentUser) return;
 
-                // 2. We need to identify who we are chatting against (targetUserId)
-                // If the current user is the donor, target userId is the requester. Wait.
-                // We only have donorId and requestId in params.
-                // Actually, we need to fetch the blood request details to see who the requester is.
+                // 2. Identify target user
                 const resRequest = await axios.get(`/blood/request/${requestId}`);
                 const requestData = resRequest.data;
                 const requesterId = requestData.requester._id || requestData.requester;
 
                 let targetId = requesterId;
-                if (resUser.data._id === requesterId) {
+                if (currentUser._id === requesterId || currentUser.id === requesterId) {
                     targetId = donorId;
                 }
                 setTargetUserId(targetId);
@@ -59,21 +48,35 @@ const Chat = () => {
             }
         };
 
-        fetchUserAndMessages();
-    }, [requestId, donorId]);
+        fetchTargetAndMessages();
+    }, [requestId, donorId, currentUser]);
 
     useEffect(() => {
         // Connect Socket.io
-        socket.connect();
-        socket.emit("join_chat", roomId);
+        if (!socket.connected) socket.connect();
 
-        socket.on("receive_message", (message) => {
+        const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+        const myId = storedUser?.id || storedUser?._id || "";
+
+        socket.emit("join_chat", { roomId, userId: myId });
+
+        socket.on("receive_message", async (message) => {
             setMessages((prev) => [...prev, message]);
+            
+            // If message is received while in chat, mark it as read on the backend
+            const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+            const myId = storedUser?.id || storedUser?._id || "";
+            if (message.receiver === myId) {
+                    await axios.post("/chat/mark-as-read", { 
+                        requestId: message.bloodRequest, 
+                        targetUserId: message.sender 
+                    });
+            }
         });
 
         return () => {
             socket.off("receive_message");
-            socket.disconnect();
+            socket.emit("leave_chat", { roomId });
         };
     }, [roomId]);
 
@@ -87,12 +90,13 @@ const Chat = () => {
 
         const messageData = {
             bloodRequest: requestId,
-            sender: currentUser._id,
-            receiver: targetUserId,
+            sender: currentUser.id || currentUser._id,
+            receiver: targetUserId.toString(),
             text: newMessage,
             roomId,
         };
 
+        console.log("Sending message data:", messageData);
         socket.emit("send_message", messageData);
         setNewMessage("");
     };

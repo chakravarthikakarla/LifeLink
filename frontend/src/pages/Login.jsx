@@ -2,14 +2,16 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
 import axios from "../services/api";
 
 const Login = () => {
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
@@ -17,26 +19,23 @@ const Login = () => {
 
     try {
       setLoading(true);
-      setError("");
 
       const res = await axios.post("/auth/login", {
         email,
         password,
       });
 
-      // Save token
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      login(res.data.token, res.data.user);
+      toast.success("Welcome back!");
 
-      // 🔴 CHECK PROFILE STATUS
       if (!res.data.profileCompleted) {
-        navigate("/details");   // open profile page
+        navigate("/details");
       } else {
-        navigate("/");               // dashboard/home
+        navigate("/");
       }
 
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+      toast.error(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -50,11 +49,6 @@ const Login = () => {
           Sign in to LifeLink
         </h2>
 
-        {error && (
-          <p className="text-red-600 text-sm mb-4 text-center">
-            {error}
-          </p>
-        )}
 
         <form onSubmit={handleLogin}>
 
@@ -131,8 +125,8 @@ const Login = () => {
                   mode: "login",
                 });
 
-                localStorage.setItem("token", res.data.token);
-                localStorage.setItem("user", JSON.stringify(res.data.user));
+                login(res.data.token, res.data.user);
+                toast.success("Login successful with Google!");
 
                 if (!res.data.profileCompleted) {
                   navigate("/details");
@@ -140,13 +134,13 @@ const Login = () => {
                   navigate("/");
                 }
               } catch (err) {
-                setError(err.response?.data?.message || "Google login failed.");
+                toast.error(err.response?.data?.message || "Google login failed.");
               } finally {
                 setLoading(false);
               }
             }}
             onError={() => {
-              setError("Google login failed. Please try again.");
+              toast.error("Google login failed. Please try again.");
             }}
             useOneTap
           />

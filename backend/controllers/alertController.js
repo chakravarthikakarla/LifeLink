@@ -1,5 +1,7 @@
+const mongoose = require("mongoose");
 const Alert = require("../models/Alert");
 const BloodRequest = require("../models/BloodRequest");
+const Message = require("../models/Message");
 
 // 🔔 Get alerts globally for logged-in user
 const getAlerts = async (req, res) => {
@@ -7,10 +9,34 @@ const getAlerts = async (req, res) => {
     // Auto-close requests older than 3 days
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    await BloodRequest.updateMany(
-      { status: "active", createdAt: { $lt: threeDaysAgo } },
-      { status: "closed" }
-    );
+    
+    // Find active requests that are about to be auto-closed
+    const soonToBeClosed = await BloodRequest.find({
+      status: "active",
+      createdAt: { $lt: threeDaysAgo }
+    });
+
+    if (soonToBeClosed.length > 0) {
+      const ids = soonToBeClosed.map(r => r._id);
+      
+      // Update requests
+      await BloodRequest.updateMany(
+        { _id: { $in: ids } },
+        { $set: { status: "closed", closedAt: new Date() } }
+      );
+
+      // Update associated Alerts to ensure they stay visible for 24h from now
+      await Alert.updateMany(
+        { bloodRequest: { $in: ids } },
+        { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
+      );
+
+      // Notify users
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("notification_update", { type: "alert" });
+      }
+    }
 
     let alerts = await Alert.find({
       expiresAt: { $gt: new Date() },
@@ -18,17 +44,52 @@ const getAlerts = async (req, res) => {
       .populate("bloodRequest")
       .sort({ createdAt: -1 });
 
-    // Filter out alerts where bloodRequest is missing or closed
-    alerts = alerts.filter(
-      (alert) => alert.bloodRequest && alert.bloodRequest.status === "active"
-    );
+    // Include active requests OR closed requests that were closed within the last 24 hours
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
-    // Attach current user's ID so frontend can check accept/reject status
-    const alertsWithUserId = alerts.map((alert) => {
-      const obj = alert.toObject();
-      obj._myId = req.user._id.toString();
-      return obj;
+    const currentUserId = req.user._id.toString();
+
+    alerts = alerts.filter((alert) => {
+      if (!alert.bloodRequest) return false;
+      
+      // 🚫 Exclude requester from seeing their own alerts
+      const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
+      if (requesterId === currentUserId) return false;
+
+      if (alert.bloodRequest.status === "active") return true;
+      if (alert.bloodRequest.status === "closed") {
+        const closedTime = alert.bloodRequest.closedAt || alert.bloodRequest.updatedAt;
+        return new Date(closedTime) > oneDayAgo;
+      }
+      return false;
     });
+
+    // Attach current user's ID and calculate unread counts
+    const alertsWithUserId = await Promise.all(
+      alerts.map(async (alert) => {
+        const obj = alert.toObject();
+        obj._myId = req.user._id.toString();
+
+        // If user has accepted, check for unread messages from the requester
+        const accepted = alert.acceptedDonors.some(
+          (d) => d.user.toString() === obj._myId
+        );
+
+        if (accepted && obj.bloodRequest?.requester) {
+          obj.unreadCount = await Message.countDocuments({
+            bloodRequest: new mongoose.Types.ObjectId(obj.bloodRequest._id),
+            sender: new mongoose.Types.ObjectId(obj.bloodRequest.requester),
+            receiver: new mongoose.Types.ObjectId(req.user._id),
+            isRead: false,
+          });
+        } else {
+          obj.unreadCount = 0;
+        }
+
+        return obj;
+      })
+    );
 
     res.status(200).json(alertsWithUserId);
   } catch (error) {
@@ -78,9 +139,16 @@ const acceptAlert = async (req, res) => {
     // Notify the requester via Socket.io so their MyRequests page auto-refreshes
     const io = req.app.get("io");
     if (io && alert.bloodRequest?.requester) {
-      io.emit("notification_update", {
+      const requesterId = alert.bloodRequest.requester.toString();
+      io.to(requesterId).emit("notification_update", {
         type: "donor_accepted",
-        receiver: alert.bloodRequest.requester.toString(),
+        receiver: requesterId,
+      });
+
+      // Also notify the donor (current user) to refresh their own view
+      io.to(req.user._id.toString()).emit("notification_update", {
+        type: "self_accepted",
+        receiver: req.user._id.toString()
       });
     }
 
@@ -88,7 +156,18 @@ const acceptAlert = async (req, res) => {
     const requiredUnits = alert.bloodRequest.units || 1;
     if (alert.acceptedDonors.length >= requiredUnits) {
       alert.bloodRequest.status = "closed";
+      alert.bloodRequest.closedAt = new Date();
       await alert.bloodRequest.save();
+
+      // Extend alert expiry to 24h from now
+      alert.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await alert.save();
+
+      // Notify others that the alert is now closed (global update)
+      if (io) {
+        io.emit("notification_update", { type: "alert" });
+      }
+
       return res.status(200).json({
         message: "You accepted the request. All units fulfilled — request is now closed!",
         requestClosed: true,

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const BloodRequest = require("../models/BloodRequest");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
@@ -58,17 +59,14 @@ const createBloodRequest = async (req, res) => {
       donors: matchingDonors.map((u) => u._id),
     });
 
-    // Notify matching donors via Socket.io
+    // Notify all users via Socket.io so everyone sees the new alert
     const io = req.app.get("io");
     if (io) {
-      matchingDonors.forEach((donor) => {
-        io.emit("notification_update", { type: "alert", receiver: donor._id });
-      });
+      io.emit("notification_update", { type: "alert" });
     }
 
     // Send email notification to each matching donor
     if (matchingDonors.length > 0) {
-      console.log(`[BloodRequest] Found ${matchingDonors.length} matching donors. Preparing to send emails...`);
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -115,16 +113,16 @@ const createBloodRequest = async (req, res) => {
           `,
         };
         return transporter.sendMail(mailOptions)
-          .then((info) => console.log(`✅ Blood Request email sent to ${donor.email}: ${info.messageId}`))
+          .then((info) => { /* success */ })
           .catch((err) => {
-            console.error(`❌ Failed to email donor ${donor.email}:`, err.message);
+            // Error silently ignored for terminal cleanup
           });
       });
 
-      // Fire-and-forget, don't block the response
-      Promise.all(emailPromises);
+      // Tracking email delivery
+      await Promise.all(emailPromises);
     } else {
-      console.log(`[BloodRequest] No matching donors found for blood group ${bloodGroup}. Emails skipped.`);
+      // No donors found
     }
 
     res.status(201).json({
@@ -133,7 +131,6 @@ const createBloodRequest = async (req, res) => {
       matchedDonors: matchingDonors.length,
     });
   } catch (error) {
-    console.error("Create blood request error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -167,9 +164,9 @@ const getMyRequests = async (req, res) => {
               .sort((a, b) => new Date(a.acceptedAt) - new Date(b.acceptedAt))
               .map(async (d) => {
                 const unreadCount = await Message.countDocuments({
-                  bloodRequest: request._id,
-                  sender: d.user?._id,
-                  receiver: req.user._id,
+                  bloodRequest: new mongoose.Types.ObjectId(request._id),
+                  sender: new mongoose.Types.ObjectId(d.user?._id),
+                  receiver: new mongoose.Types.ObjectId(req.user._id),
                   isRead: false
                 });
 
@@ -188,7 +185,6 @@ const getMyRequests = async (req, res) => {
 
           return reqObj;
         } catch (innerErr) {
-          console.error(`Error processing request ${request._id}:`, innerErr);
           const reqObj = request.toObject();
           reqObj.acceptedDonors = [];
           return reqObj;
@@ -198,7 +194,6 @@ const getMyRequests = async (req, res) => {
 
     res.status(200).json(requestsWithDonors);
   } catch (error) {
-    console.error("Get my requests error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -220,7 +215,21 @@ const closeBloodRequest = async (req, res) => {
     }
 
     request.status = "closed";
+    request.closedAt = new Date();
     await request.save();
+
+    // Also update the associated Alert's expiresAt to ensure it stays visible for 24h
+    // We use the request._id to avoid any string/ObjectId mismatch
+    await Alert.findOneAndUpdate(
+      { bloodRequest: request._id },
+      { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
+    );
+
+    // Notify all users via socket to refresh their alerts page
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("notification_update", { type: "alert" });
+    }
 
     res.status(200).json({ message: "Request closed successfully" });
   } catch (error) {
@@ -239,7 +248,6 @@ const getAllActiveRequests = async (req, res) => {
 
     res.status(200).json(activeRequests);
   } catch (error) {
-    console.error("Get all active requests error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -254,7 +262,6 @@ const getRequestById = async (req, res) => {
     }
     res.status(200).json(request);
   } catch (error) {
-    console.error("Get request by ID error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -264,17 +271,29 @@ const getUnreadAlertCount = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const lastViewed = user.profile?.lastViewedAlerts || user.createdAt;
+    const currentUserId = req.user._id.toString();
 
-    const count = await Alert.countDocuments({
-      donors: req.user._id,
-      createdAt: { $gt: lastViewed },
-      "acceptedDonors.user": { $ne: req.user._id },
-      "rejectedDonors.user": { $ne: req.user._id },
+    // Find all alerts created since lastViewed or since user joined
+    const recentAlerts = await Alert.find({
+      $or: [
+        { createdAt: { $gt: lastViewed } },
+        { createdAt: { $gt: user.createdAt } }
+      ]
+    }).populate("bloodRequest");
+
+    const unreadAlerts = recentAlerts.filter(alert => {
+      if (!alert.bloodRequest) return false;
+      const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
+      const isRequester = requesterId === currentUserId;
+      
+      const hasAccepted = alert.acceptedDonors.some(d => d.user?.toString() === currentUserId);
+      const hasRejected = alert.rejectedDonors.some(id => id?.toString() === currentUserId);
+
+      return !isRequester && !hasAccepted && !hasRejected;
     });
 
-    res.status(200).json({ count });
+    res.status(200).json({ count: unreadAlerts.length });
   } catch (error) {
-    console.error("Get unread alert count error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -285,9 +304,12 @@ const markAlertsAsViewed = async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, {
       "profile.lastViewedAlerts": new Date()
     });
+    const io = req.app.get("io");
+    if (io) {
+      io.to(req.user._id.toString()).emit("notification_update", { type: "alert_read" });
+    }
     res.status(200).json({ message: "Alerts marked as viewed" });
   } catch (error) {
-    console.error("Mark alerts as viewed error:", error);
     res.status(500).json({ message: error.message });
   }
 };

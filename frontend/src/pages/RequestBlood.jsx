@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 /* Shared input style */
 const inputClass =
@@ -28,11 +29,11 @@ const RequestBlood = () => {
     e.preventDefault();
 
     if (!form.patientName || !form.bloodGroup || !form.units || !form.address || !form.phone || !form.requiredDate) {
-      alert("Please fill in all required fields.");
+      toast.error("Please fill in all required fields.");
       return;
     }
     if (form.phone.length !== 10 || !/^\d+$/.test(form.phone)) {
-      alert("Please enter a valid 10-digit contact number.");
+      toast.error("Please enter a valid 10-digit contact number.");
       return;
     }
 
@@ -49,12 +50,13 @@ const RequestBlood = () => {
       });
 
       const matched = res.data.matchedDonors ?? 0;
-      alert(
-        `Blood request submitted successfully!\n${matched > 0 ? `✅ ${matched} matching donor(s) have been notified via email.` : "ℹ️ No matching donors found right now. Your request is still active."}`
+      toast.success(
+        `Blood request submitted successfully!\n${matched > 0 ? `✅ ${matched} matching donor(s) have been notified.` : "ℹ️ No matching donors found right now."}`,
+        { duration: 5000 }
       );
       navigate("/my-requests");
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to submit request");
+      toast.error(error.response?.data?.message || "Failed to submit request");
     } finally {
       setLoading(false);
     }

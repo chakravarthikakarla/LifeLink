@@ -6,7 +6,7 @@ import heroImage from "../assets/blood.png";
 
 const Hero = () => {
   const navigate = useNavigate();
-  const isLoggedIn = !!localStorage.getItem("token");
+  const isLoggedIn = !!sessionStorage.getItem("token");
 
   const handleGetBlood = () => {
     if (!isLoggedIn) {

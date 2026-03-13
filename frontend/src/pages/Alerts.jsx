@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
 import Modal from "../components/Modal";
+import Skeleton from "../components/Skeleton";
+import socket from "../socket";
 
 const Alerts = () => {
   const navigate = useNavigate();
@@ -13,6 +15,7 @@ const Alerts = () => {
     type: "confirm",
     onConfirm: () => { },
   });
+  const [loading, setLoading] = useState(true);
 
   // 🔔 Fetch alerts
   const fetchAlerts = async () => {
@@ -20,13 +23,23 @@ const Alerts = () => {
       const res = await axios.get("/alerts");
       setAlerts(res.data);
     } catch (error) {
-      console.error("Failed to fetch alerts", error);
+      // log removed
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
+    const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+    const myId = storedUser?.id || storedUser?._id || "";
+
+    if (myId) {
+      socket.emit("join_notifications", myId);
+    }
+
     fetchAlerts();
-    // Mark alerts as viewed
+
+    // Mark alerts as viewed (Navbar dot clearance)
     const markAsViewed = async () => {
       try {
         await axios.post("/blood/mark-viewed");
@@ -35,6 +48,18 @@ const Alerts = () => {
       }
     };
     markAsViewed();
+
+    const handleNotification = (data) => {
+      if (data.type === "message" || data.type === "alert") {
+        fetchAlerts();
+      }
+    };
+
+    socket.on("notification_update", handleNotification);
+
+    return () => {
+      socket.off("notification_update", handleNotification);
+    };
   }, []);
 
   // ✅ Accept alert
@@ -106,14 +131,18 @@ const Alerts = () => {
               (id) => id.toString() === myId
             );
 
-          return (
-            <div
-              key={alert._id}
-              className={`rounded-xl shadow-sm p-6 flex justify-between items-start transition-colors
-                ${rejected
-                  ? "bg-gray-200 opacity-70"
-                  : "bg-white border border-gray-100"}`}
-            >
+            const isClosed = request?.status === "closed";
+
+            return (
+              <div
+                key={alert._id}
+                className={`rounded-xl shadow-sm p-6 flex justify-between items-start transition-all
+                  ${rejected || (isClosed && !accepted)
+                    ? "bg-gray-100 opacity-70 grayscale-[0.5]"
+                    : isClosed && accepted
+                      ? "bg-gray-100 border border-gray-200"
+                      : "bg-white border border-gray-100"}`}
+              >
               {/* LEFT */}
               <div className="space-y-2 text-black">
                 <h3 className="text-xl font-bold uppercase">
@@ -170,10 +199,22 @@ const Alerts = () => {
                 )}
 
                 {/* ❌ REJECTED LABEL */}
-                {rejected && !accepted && (
+                {rejected && !accepted && !isClosed && (
                   <p className="text-sm font-semibold text-gray-600 mt-2">
                     Rejected
                   </p>
+                )}
+
+                {/* 🏁 CLOSED LABEL */}
+                {isClosed && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-700 px-3 py-1 rounded-md font-bold text-xs uppercase tracking-wider border border-gray-300">
+                      🔒 Request Closed
+                    </span>
+                    {!accepted && !rejected && (
+                      <span className="text-xs text-gray-500 italic">This request reached its limit or was cancelled.</span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -181,19 +222,31 @@ const Alerts = () => {
               <div className="flex flex-col gap-3 min-w-[110px] items-end">
                 {accepted ? (
                   <div className="flex flex-col items-end gap-2">
-                    <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-4 py-2 rounded-lg font-semibold text-sm">
+                    <span className={`inline-flex items-center gap-1 px-4 py-2 rounded-lg font-semibold text-sm
+                      ${isClosed 
+                        ? "bg-gray-200 text-gray-500" 
+                        : "bg-green-100 text-green-700"}`}>
                       ✓ Accepted
                     </span>
-                    <button
-                      onClick={() => navigate(`/chat/${request._id}/${myId}`)}
-                      className="text-[#6a0026] hover:bg-[#6a0026] hover:text-white border border-[#6a0026] px-4 py-1.5 rounded-lg text-sm font-medium transition"
-                    >
-                      💬 Chat
-                    </button>
+                    {!isClosed && (
+                      <button
+                        onClick={() => navigate(`/chat/${request._id}/${myId}`)}
+                        className="text-[#6a0026] hover:bg-[#6a0026] hover:text-white border border-[#6a0026] px-4 py-1.5 rounded-lg text-sm font-medium transition relative group"
+                      >
+                        💬 Chat
+                        {alert.unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 border-2 border-white rounded-full animate-pulse shadow-sm"></span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 ) : rejected ? (
-                  <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-semibold text-sm">
+                  <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 px-4 py-2 rounded-lg font-semibold text-sm">
                     ✗ Rejected
+                  </span>
+                ) : isClosed ? (
+                   <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-semibold text-sm italic">
+                    Closed
                   </span>
                 ) : (
                   <>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "react-hot-toast";
 import axios from "../services/api";
 
 const Register = () => {
@@ -11,32 +12,30 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async (e) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
     try {
       setLoading(true);
-      setError("");
 
       const res = await axios.post("/auth/register", {
         email,
         password,
       });
 
-      // Save userId temporarily for OTP verification
-      localStorage.setItem("pendingUserId", res.data.userId);
+      sessionStorage.setItem("pendingUserId", res.data.userId);
+      toast.success("Registration successful! Verify OTP.");
       navigate("/verify-otp");
 
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed");
+      toast.error(err.response?.data?.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -50,11 +49,6 @@ const Register = () => {
           Sign up for LifeLink
         </h2>
 
-        {error && (
-          <p className="text-red-600 text-sm mb-4 text-center">
-            {error}
-          </p>
-        )}
 
         <form onSubmit={handleRegister}>
 
@@ -145,16 +139,16 @@ const Register = () => {
                   mode: "register",
                 });
 
-                alert(res.data.message || "Registration successful! Please login.");
+                toast.success(res.data.message || "Registration successful! Please login.");
                 navigate("/login");
               } catch (err) {
-                setError(err.response?.data?.message || "Google registration failed.");
+                toast.error(err.response?.data?.message || "Google registration failed.");
               } finally {
                 setLoading(false);
               }
             }}
             onError={() => {
-              setError("Google login failed. Please try again.");
+              toast.error("Google registration failed. Please try again.");
             }}
             text="signup_with"
             useOneTap

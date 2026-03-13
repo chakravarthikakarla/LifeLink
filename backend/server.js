@@ -19,11 +19,9 @@ const frontendURL = (process.env.FRONTEND_URL || "http://localhost:5173").replac
 const allowedOrigins = [
   frontendURL,
   "https://lifelink-connect.vercel.app", // Explicitly add production URL
-  "http://localhost:5173",
-  "http://localhost:5174"
+  "http://localhost:5173"
 ];
 
-console.log("Allowed Origins:", allowedOrigins);
 
 const io = new Server(server, {
   cors: {
@@ -42,7 +40,6 @@ app.use(cors({
     if (allowedOrigins.includes(origin.replace(/\/$/, ""))) {
       callback(null, true);
     } else {
-      console.log("Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -70,16 +67,43 @@ app.get("/", (req, res) => {
 
 // Socket.io connection
 io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id}`);
 
-  socket.on("join_chat", (roomId) => {
+  // Join a private room for user-specific notifications
+  socket.on("join_notifications", (userId) => {
+    if (userId) {
+      socket.userId = userId.toString();
+      socket.join(socket.userId);
+    }
+  });
+
+  socket.on("join_chat", ({ roomId, userId }) => {
+    if (userId) socket.userId = userId.toString();
     socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
+  });
+
+  socket.on("leave_chat", ({ roomId }) => {
+    socket.leave(roomId);
   });
 
   socket.on("send_message", async (data) => {
     try {
       const { bloodRequest, sender, receiver, text, roomId } = data;
+      const receiverIdStr = receiver.toString();
+
+      // Check if receiver is currently in the same chat room
+      const room = io.sockets.adapter.rooms.get(roomId);
+      let isReceiverInRoom = false;
+      
+      if (room) {
+        for (const socketId of room) {
+          const s = io.sockets.sockets.get(socketId);
+          if (s && s.userId === receiverIdStr) {
+            isReceiverInRoom = true;
+            break;
+          }
+        }
+      }
+
 
       // Save message to database
       const newMessage = new Message({
@@ -87,21 +111,29 @@ io.on("connection", (socket) => {
         sender,
         receiver,
         text,
+        isRead: isReceiverInRoom
       });
       const savedMessage = await newMessage.save();
 
       // Emit to room
       io.to(roomId).emit("receive_message", savedMessage);
 
-      // Emit notification update to receiver
-      io.emit("notification_update", { type: "message", receiver });
+      // Notify receiver via their private notification room if they are NOT in the chat
+      if (!isReceiverInRoom) {
+        io.to(receiverIdStr).emit("notification_update", { 
+          type: "message", 
+          receiver: receiverIdStr,
+          requestId: bloodRequest,
+          sender
+        });
+      }
     } catch (err) {
-      console.error(err);
+      // Error ignored
     }
   });
 
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
+    // Disconnected
   });
 });
 

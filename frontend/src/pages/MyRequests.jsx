@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Skeleton from "../components/Skeleton";
 import axios from "../services/api";
-import { io } from "socket.io-client";
-
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-const socket = io(SOCKET_URL, {
-  withCredentials: true,
-  transports: ["websocket", "polling"]
-});
+import socket from "../socket";
+import { toast } from "react-hot-toast";
+import Modal from "../components/Modal";
 
 const MyRequests = () => {
     const navigate = useNavigate();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalConfig, setModalConfig] = useState({
+        title: "",
+        message: "",
+        type: "confirm",
+        onConfirm: () => { },
+    });
 
     const fetchRequests = async () => {
         try {
@@ -26,17 +30,25 @@ const MyRequests = () => {
     };
 
     useEffect(() => {
-        fetchRequests();
+        const storedUser = JSON.parse(sessionStorage.getItem("user") || "{}");
+        // We use .id consistently as sent by the backend
+        const myId = storedUser?.id || storedUser?._id || "";
 
-        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-        // Navbar saves _id or id depending on the login flow (Google vs Form)
-        const myId = storedUser?._id || storedUser?.id || "";
-        console.log("MyRequests listening for notifications for ID:", myId);
+        if (myId) {
+            console.log("MyRequests joining notification room:", myId);
+            socket.emit("join_notifications", myId);
+        }
+
+        fetchRequests();
 
         const handleNotification = (data) => {
             console.log("MyRequests received socket event:", data);
-            if (data.type === "donor_accepted" && data.receiver === myId) {
+
+            if (data.type === "donor_accepted") {
                 console.log("Match found! Refreshing requests...");
+                fetchRequests();
+            } else if (data.type === "message") {
+                console.log("New message received! Triggering re-fetch for unread counts...");
                 fetchRequests();
             }
         };
@@ -48,22 +60,36 @@ const MyRequests = () => {
         };
     }, []);
 
-    const handleClose = async (requestId) => {
-        const confirm = window.confirm("Are you sure you want to close this request?");
-        if (!confirm) return;
-
-        try {
-            await axios.post("/blood/close", { requestId });
-            fetchRequests();
-        } catch (error) {
-            alert(error.response?.data?.message || "Failed to close request");
-        }
+    const handleClose = (requestId) => {
+        setModalConfig({
+            title: "Close Request",
+            message: "Are you sure you want to close this blood request? This action cannot be undone.",
+            type: "confirm",
+            onConfirm: async () => {
+                try {
+                    await axios.post("/blood/close", { requestId });
+                    toast.success("Request closed successfully");
+                    fetchRequests();
+                    setModalOpen(false);
+                } catch (error) {
+                    toast.error(error.response?.data?.message || "Failed to close request");
+                }
+            },
+        });
+        setModalOpen(true);
     };
 
     if (loading) {
         return (
-            <div className="min-h-[calc(100vh-96px)] flex items-center justify-center">
-                Loading...
+            <div className="min-h-[calc(100vh-96px)] bg-gray-50 px-6 md:px-20 py-10">
+                <div className="flex items-center justify-between mb-10">
+                    <Skeleton width="20rem" height="3rem" />
+                    <Skeleton width="10rem" height="3rem" />
+                </div>
+                <div className="space-y-6">
+                    <Skeleton height="12rem" className="rounded-xl" />
+                    <Skeleton height="12rem" className="rounded-xl" />
+                </div>
             </div>
         );
     }
@@ -259,6 +285,15 @@ const MyRequests = () => {
                     </div>
                 ))}
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                onClose={() => setModalOpen(false)}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                onConfirm={modalConfig.onConfirm}
+            />
         </div>
     );
 };

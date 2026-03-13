@@ -1,10 +1,11 @@
 const express = require("express");
-const { getChatHistory, getUnreadCount } = require("../controllers/chatController");
+const chatController = require("../controllers/chatController");
 const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.get("/unread", authMiddleware, getUnreadCount);
-router.get("/:requestId/:targetUserId", authMiddleware, getChatHistory);
+router.get("/unread-count", authMiddleware, chatController.getUnreadCount);
+router.post("/mark-as-read", authMiddleware, chatController.markAsRead);
+router.get("/:requestId/:targetUserId", authMiddleware, chatController.getChatHistory);
 
 module.exports = router;

@@ -5,8 +5,8 @@ const Modal = ({ isOpen, onClose, onConfirm, title, message, type = "confirm" })
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 transform transition-all scale-100">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md transition-opacity">
+            <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-white/20 transform transition-all scale-100">
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
                     <h3 className="text-xl font-bold text-gray-900">{title}</h3>
                     <button
