@@ -18,12 +18,31 @@ const sendWelcomeEmail = async (email, name) => {
       email,
       "Welcome to LifeLink! Registration Successful",
       `
-      <div style="font-family: Arial; max-width:600px; margin:auto">
-        <h2 style="color:#d9534f">Welcome to LifeLink!</h2>
+      <div style="font-family: Arial, sans-serif; line-height:1.6; max-width:600px; margin:auto;">
+        <h2 style="color:#d9534f;">Welcome to LifeLink!</h2>
+
         <p>Dear ${name || "User"},</p>
-        <p>Your account has been successfully verified and registration is complete.</p>
-        <p>Thank you for joining LifeLink. Your participation helps save lives by connecting donors with people in need.</p>
-        <p>Best regards,<br/><b>LifeLink Team</b></p>
+
+        <p>
+        Congratulations! Your account has been successfully verified and your registration is complete.
+        </p>
+
+        <p>
+        Thank you for joining our noble cause. Your participation in LifeLink can help save lives by
+        connecting blood donors with those in need. Every drop counts!
+        </p>
+
+        <p>
+        You can now log in to your account and complete your profile, request blood,
+        or register as a donor.
+        </p>
+
+        <br/>
+
+        <p>
+        Best regards,<br/>
+        <strong>The LifeLink Team</strong>
+        </p>
       </div>
       `
     );

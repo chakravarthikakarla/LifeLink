@@ -3,7 +3,7 @@ const BloodRequest = require("../models/BloodRequest");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
 const Message = require("../models/Message");
-const transporter = require("../config/emailConfig");
+const sendEmail = require("../utils/sendEmail");
 const createBloodRequest = async (req, res) => {
   try {
     const {
@@ -78,39 +78,67 @@ const createBloodRequest = async (req, res) => {
         urgency === "Emergency" ? "#d9534f" : urgency === "Urgent" ? "#f0ad4e" : "#5cb85c";
 
       const emailPromises = matchingDonors.map((donor) => {
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: donor.email,
-          subject: `🚨 LifeLink: Urgent Blood Request - ${bloodGroup} Needed`,
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
-              <h2 style="color: #d9534f; border-bottom: 2px solid #eee; padding-bottom: 10px;">🩸 Blood Required - Please Help!</h2>
-              <p>Dear ${donor.profile?.name || "Donor"},</p>
-              <p>A patient urgently needs your blood type <strong>${bloodGroup}</strong>. As a registered donor, you make a critical difference!</p>
-              <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p><strong>Patient:</strong> ${patientName}</p>
-                <p><strong>Blood Group:</strong> ${bloodGroup}</p>
-                <p><strong>Units Needed:</strong> ${units}</p>
-                <p><strong>Required By:</strong> ${requiredDateStr}</p>
-                <p><strong>Location:</strong> ${requestAddress}</p>
-                <p><strong>Contact:</strong> ${phone}</p>
-                <p><strong style="color: ${urgencyColor};">Urgency: ${urgency || "Normal"}</strong></p>
-              </div>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')}/alerts" style="background-color: #d9534f; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">View Alert & Respond</a>
-              </div>
-              <p>Please log in to LifeLink to view full details and accept this request.</p>
-              <p>Every drop counts. Thank you for your noble service! ❤️</p>
-              <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-            </div>
-          `,
-        };
-        return transporter.sendMail(mailOptions)
-          .then((info) => { /* success */ })
-          .catch((err) => {
-            // Error silently ignored for terminal cleanup
-          });
-      });
+
+  const alertLink = `${process.env.FRONTEND_URL}/alerts`;
+
+  const html = `
+  <div style="font-family: Arial, sans-serif; line-height:1.6; max-width:600px; margin:auto; border:1px solid #ddd; padding:20px; border-radius:8px;">
+
+    <h2 style="color:#d9534f;">🩸 Blood Required - Please Help!</h2>
+
+    <p>Dear ${donor.profile?.name || "Donor"},</p>
+
+    <p>
+    A patient urgently needs your blood type <strong>${bloodGroup}</strong>.
+    As a registered donor, you make a critical difference!
+    </p>
+
+    <div style="background:#f8f9fa; padding:15px; border-radius:6px;">
+
+      <p><strong>Patient:</strong> ${patientName}</p>
+      <p><strong>Blood Group:</strong> ${bloodGroup}</p>
+      <p><strong>Units Needed:</strong> ${units}</p>
+      <p><strong>Required By:</strong> ${requiredDateStr}</p>
+      <p><strong>Location:</strong> ${requestAddress}</p>
+      <p><strong>Contact:</strong> ${phone}</p>
+      <p style="color:${urgencyColor};"><strong>Urgency:</strong> ${urgency || "Normal"}</p>
+
+    </div>
+
+    <div style="text-align:center; margin:30px 0;">
+      <a href="${alertLink}"
+      style="
+        background:#d9534f;
+        color:white;
+        padding:12px 24px;
+        text-decoration:none;
+        border-radius:6px;
+        font-weight:bold;
+        display:inline-block;
+      ">
+      View Alert & Respond
+      </a>
+    </div>
+
+    <p>Please log in to LifeLink to view full details and accept this request.</p>
+
+    <p>Every drop counts. Thank you for your noble service! ❤️</p>
+
+    <p>
+    Best regards,<br/>
+    <strong>The LifeLink Team</strong>
+    </p>
+
+  </div>
+  `;
+
+  return sendEmail(
+    donor.email,
+    `🩸 LifeLink: Blood Request - ${bloodGroup} Needed`,
+    html
+  );
+
+});
 
       // Tracking email delivery
       await Promise.all(emailPromises);
