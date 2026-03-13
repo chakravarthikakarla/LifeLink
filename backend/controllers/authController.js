@@ -1,12 +1,12 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const sendEmail = require("../utils/sendEmail");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
+
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-
-const transporter = require("../config/emailConfig");
 // helper function to generate 4-digit OTP
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -15,27 +15,21 @@ const generateOTP = () => {
 // helper function to send welcome email
 const sendWelcomeEmail = async (email, name) => {
   try {
-
-    // smtp verify removed for production cleanup
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Welcome to LifeLink! Registration Successful",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #d9534f;">Welcome to LifeLink!</h2>
-          <p>Dear ${name || "User"},</p>
-          <p>Congratulations! Your account has been successfully verified and your registration is complete.</p>
-          <p>Thank you for joining our noble cause. Your participation in LifeLink can help save lives by connecting blood donors with those in need. Every drop counts!</p>
-          <p>You can now log in to your account and complete your profile, request blood, or register as a donor.</p>
-          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-        </div>
-      `,
-    };
-    await transporter.sendMail(mailOptions);
+    await sendEmail(
+      email,
+      "Welcome to LifeLink! Registration Successful",
+      `
+      <div style="font-family: Arial; max-width:600px; margin:auto">
+        <h2 style="color:#d9534f">Welcome to LifeLink!</h2>
+        <p>Dear ${name || "User"},</p>
+        <p>Your account has been successfully verified and registration is complete.</p>
+        <p>Thank you for joining LifeLink. Your participation helps save lives by connecting donors with people in need.</p>
+        <p>Best regards,<br/><b>LifeLink Team</b></p>
+      </div>
+      `
+    );
   } catch (err) {
-    // Error ignored
+    console.log("Welcome email failed");
   }
 };
 
@@ -55,18 +49,14 @@ exports.register = async (req, res) => {
 
     let user;
     const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     if (existingUser && !existingUser.isVerified) {
-      // Re-use existing unverified user but update OTP
       existingUser.otp = otp;
       existingUser.otpExpiry = otpExpiry;
-      if (password) {
-        existingUser.password = await bcrypt.hash(password, 10);
-      }
+      existingUser.password = await bcrypt.hash(password, 10);
       user = await existingUser.save();
     } else {
-      // Create new user
       const hashedPassword = await bcrypt.hash(password, 10);
       user = await User.create({
         email,
@@ -77,33 +67,19 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Send OTP via Email
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "LifeLink - Verify Your Email",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #d9534f;">LifeLink Email Verification</h2>
-          <p>Hello,</p>
-          <p>Thank you for registering with LifeLink. Please use the following One-Time Password (OTP) to verify your email address and complete your registration.</p>
-          <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
-            <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #000;">${otp}</span>
-          </div>
-          <p>This OTP is valid for 10 minutes. If you did not request this verification, please ignore this email.</p>
-          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-        </div>
-      `,
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to send verification email. Please try again." });
-    }
+    await sendEmail(
+      email,
+      "LifeLink - Verify Your Email",
+      `
+      <h2>LifeLink Email Verification</h2>
+      <p>Your OTP is:</p>
+      <h1>${otp}</h1>
+      <p>This OTP is valid for 10 minutes.</p>
+      `
+    );
 
     res.status(201).json({
-      message: existingUser ? "OTP resent. Verify OTP." : "User registered successfully. Verify OTP.",
+      message: "User registered. Verify OTP.",
       userId: user._id,
     });
   } catch (error) {
@@ -115,19 +91,9 @@ exports.verifyOtp = async (req, res) => {
   try {
     const { userId, otp } = req.body;
 
-    if (!userId || !otp) {
-      return res.status(400).json({ message: "UserId and OTP are required" });
-    }
-
     const user = await User.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (user.isVerified) {
-      return res.status(400).json({ message: "User already verified" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.otp !== otp) {
       return res.status(400).json({ message: "Invalid OTP" });
@@ -143,7 +109,6 @@ exports.verifyOtp = async (req, res) => {
 
     await user.save();
 
-    // Send Registration Success Email (Standardized helper)
     await sendWelcomeEmail(user.email, user.profile?.name);
 
     res.status(200).json({
@@ -154,56 +119,33 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-
-
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password required" });
-    }
-
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     if (!user.isVerified) {
-      return res.status(403).json({ message: "Please verify OTP before login" });
+      return res.status(403).json({ message: "Verify OTP first" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
     const token = generateToken(user._id);
-
-    // ✅ Check profile completion
-    const profile = user.profile || {};
-
-    const profileCompleted =
-      profile.name &&
-      profile.phone &&
-      profile.bloodGroup &&
-      profile.gender &&
-      profile.dob &&
-      profile.address &&
-      profile.pincode;
 
     res.status(200).json({
       message: "Login successful",
       token,
-      profileCompleted: !!profileCompleted,
       user: {
         id: user._id,
         email: user.email,
       },
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -212,147 +154,29 @@ exports.resendOtp = async (req, res) => {
   try {
     const { userId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ message: "UserId is required" });
-    }
-
     const user = await User.findById(userId);
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.isVerified) {
-      return res.status(400).json({ message: "User already verified" });
-    }
-
-    // Generate new 4-digit OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     user.otp = otp;
     user.otpExpiry = otpExpiry;
+
     await user.save();
 
-    // Send OTP via Email
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: "LifeLink - Resend verification OTP",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #d9534f;">LifeLink Email Verification</h2>
-          <p>Hello,</p>
-          <p>You have requested a new One-Time Password (OTP) to verify your email address. Please use the following OTP:</p>
-          <div style="background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
-            <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #000;">${otp}</span>
-          </div>
-          <p>This OTP is valid for 10 minutes. If you did not request this verification, please ignore this email.</p>
-          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
-        </div>
-      `,
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-    } catch (err) {
-      return res.status(500).json({ message: "Failed to send OTP email. Please try again." });
-    }
+    await sendEmail(
+      user.email,
+      "LifeLink - Resend OTP",
+      `<h2>Your OTP is: ${otp}</h2>`
+    );
 
     res.status(200).json({
       message: "OTP resent successfully",
     });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: "Server error" });
-  }
-};
-
-exports.googleLogin = async (req, res) => {
-  try {
-    const { tokenId, mode } = req.body;
-
-    // Verify the Google token
-    const ticket = await googleClient.verifyIdToken({
-      idToken: tokenId,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const { email, sub: googleId, name } = payload;
-
-    // Check if user exists
-    let user = await User.findOne({ email });
-
-    if (mode === "register") {
-      if (user) {
-        return res.status(400).json({ message: "User already exists. Please login." });
-      }
-
-      // Create new verified user
-      user = await User.create({
-        email,
-        googleId,
-        isVerified: true,
-        profile: {
-          name: name,
-        },
-      });
-
-      // Send Registration Success Email (Standardized helper)
-      await sendWelcomeEmail(user.email, name);
-
-      return res.status(201).json({
-        message: "Registration successful. Please login to continue.",
-      });
-    }
-
-    // Default or explicit 'login' mode
-    if (!user) {
-      // ✅ Automatically register if user not found during login
-      user = await User.create({
-        email,
-        googleId,
-        isVerified: true,
-        profile: {
-          name: name,
-        },
-      });
-
-      // Send Registration Success Email (Standardized helper)
-      await sendWelcomeEmail(user.email, name);
-    }
-
-    // If user exists but hasn't linked Google
-    if (!user.googleId) {
-      user.googleId = googleId;
-      user.isVerified = true;
-      await user.save();
-    }
-
-    const token = generateToken(user._id);
-
-    // Check profile completion
-    const profile = user.profile || {};
-    const profileCompleted =
-      profile.name &&
-      profile.phone &&
-      profile.bloodGroup &&
-      profile.gender &&
-      profile.dob &&
-      profile.address &&
-      profile.pincode;
-
-    res.status(200).json({
-      message: "Google Login successful",
-      token,
-      profileCompleted: !!profileCompleted,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: profile.name,
-      },
-    });
-  } catch (error) {
-    res.status(400).json({ message: "Invalid Google Token" });
   }
 };
 
@@ -360,60 +184,30 @@ exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
-
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Generate 4-digit OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     user.otp = otp;
     user.otpExpiry = otpExpiry;
+
     await user.save();
 
-    // Send email
+    await sendEmail(
+      email,
+      "LifeLink - Password Reset OTP",
+      `<h2>Your OTP: ${otp}</h2><p>Valid for 10 minutes</p>`
+    );
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "LifeLink - Password Reset OTP",
-      text: `Your OTP for password reset is: ${otp}. It is valid for 10 minutes.`,
-    };
-
-    await transporter.sendMail(mailOptions);
-
-    res.status(200).json({ message: "OTP sent to your email" });
-  } catch (error) {
-    console.error("Forgot Password Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
-exports.testEmail = async (req, res) => {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // Send to self
-      subject: "LifeLink - SMTP Test Email",
-      text: "If you are reading this, your SMTP configuration is working correctly!",
-    };
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: "Test email sent successfully!" });
-  } catch (error) {
-    console.error("SMTP Test Error:", error);
-    res.status(500).json({ 
-      message: "SMTP Test Failed", 
-      error: error.message,
-      code: error.code,
-      command: error.command
+    res.status(200).json({
+      message: "OTP sent to your email",
     });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -421,15 +215,9 @@ exports.resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({ message: "Email, OTP, and new password are required" });
-    }
-
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.otp !== otp) {
       return res.status(400).json({ message: "Invalid OTP" });
@@ -439,17 +227,16 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
-
-    // Clear OTP
+    user.password = await bcrypt.hash(newPassword, 10);
     user.otp = undefined;
     user.otpExpiry = undefined;
 
     await user.save();
 
-    res.status(200).json({ message: "Password reset successful" });
-  } catch (error) {
+    res.status(200).json({
+      message: "Password reset successful",
+    });
+  } catch {
     res.status(500).json({ message: "Server error" });
   }
 };
