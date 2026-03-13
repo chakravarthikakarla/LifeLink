@@ -1,18 +1,20 @@
-import { Resend } from "resend";
+const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const sendEmail = async (to, subject, html) => {
+const sendEmail = async (to, subject, html) => {
   try {
-    const response = await resend.emails.send({
+    await resend.emails.send({
       from: "LifeLink <onboarding@resend.dev>",
       to: to,
       subject: subject,
-      html: html,
+      html: html
     });
 
-    console.log("Email sent:", response);
+    console.log("Email sent successfully");
   } catch (error) {
-    console.error("Email error:", error);
+    console.error("Email sending error:", error);
   }
 };
+
+module.exports = sendEmail;
