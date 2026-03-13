@@ -96,7 +96,6 @@ const Chat = () => {
             roomId,
         };
 
-        console.log("Sending message data:", messageData);
         socket.emit("send_message", messageData);
         setNewMessage("");
     };

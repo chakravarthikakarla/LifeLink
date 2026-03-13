@@ -3,15 +3,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
-const nodemailer = require("nodemailer");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log(
-  "EMAIL_APP_PASSWORD:",
-  process.env.EMAIL_APP_PASSWORD ? "Loaded" : "Missing"
-);
+const transporter = require("../config/emailConfig");
 // helper function to generate 4-digit OTP
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -20,21 +15,8 @@ const generateOTP = () => {
 // helper function to send welcome email
 const sendWelcomeEmail = async (email, name) => {
   try {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD,
-      },
-    });
 
-    transporter.verify(function (error, success) {
-  if (error) {
-    console.log("SMTP ERROR:", error);
-  } else {
-    console.log("SMTP server ready");
-  }
-});
+    // smtp verify removed for production cleanup
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -96,14 +78,6 @@ exports.register = async (req, res) => {
     }
 
     // Send OTP via Email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD,
-      },
-    });
-
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -261,14 +235,6 @@ exports.resendOtp = async (req, res) => {
     await user.save();
 
     // Send OTP via Email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD,
-      },
-    });
-
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: user.email,
@@ -392,7 +358,6 @@ exports.googleLogin = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
-    console.log("Forgot password request:", req.body);
     const { email } = req.body;
 
     if (!email) {
@@ -414,13 +379,6 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     // Send email
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD,
-      },
-    });
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -433,9 +391,8 @@ exports.forgotPassword = async (req, res) => {
 
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (error) {
-
     console.error("Forgot Password Error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 

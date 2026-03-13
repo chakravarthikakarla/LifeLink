@@ -25,11 +25,23 @@ const allowedOrigins = [
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // allow requests with no origin (like mobile apps)
+      if (!origin) return callback(null, true);
+      
+      const isAllowed = allowedOrigins.includes(origin.replace(/\/$/, ""));
+      if (isAllowed || process.env.NODE_ENV !== "production") {
+        callback(null, true);
+      } else {
+        // Fallback to true but log origin for debug
+        console.log("Socket connection from origin:", origin);
+        callback(null, true); 
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   },
-  allowEIO3: true // Allow older clients if any
+  allowEIO3: true
 });
 
 // app.use(cors({

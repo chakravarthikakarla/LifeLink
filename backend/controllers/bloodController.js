@@ -3,7 +3,7 @@ const BloodRequest = require("../models/BloodRequest");
 const Alert = require("../models/Alert");
 const User = require("../models/User");
 const Message = require("../models/Message");
-const nodemailer = require("nodemailer");
+const transporter = require("../config/emailConfig");
 const createBloodRequest = async (req, res) => {
   try {
     const {
@@ -67,13 +67,6 @@ const createBloodRequest = async (req, res) => {
 
     // Send email notification to each matching donor
     if (matchingDonors.length > 0) {
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_APP_PASSWORD,
-        },
-      });
 
       const requiredDateStr = new Date(requiredDate).toLocaleDateString("en-IN", {
         day: "2-digit",

@@ -35,20 +35,17 @@ const MyRequests = () => {
         const myId = storedUser?.id || storedUser?._id || "";
 
         if (myId) {
-            console.log("MyRequests joining notification room:", myId);
             socket.emit("join_notifications", myId);
         }
 
         fetchRequests();
 
         const handleNotification = (data) => {
-            console.log("MyRequests received socket event:", data);
-
-            if (data.type === "donor_accepted") {
-                console.log("Match found! Refreshing requests...");
+            const user = JSON.parse(sessionStorage.getItem("user") || "{}");
+            const myId = user?.id || user?._id;
+            if (data.type === "donor_accepted" && data.receiver === myId) {
                 fetchRequests();
-            } else if (data.type === "message") {
-                console.log("New message received! Triggering re-fetch for unread counts...");
+            } else if (data.type === "message" && data.receiver === myId) {
                 fetchRequests();
             }
         };
