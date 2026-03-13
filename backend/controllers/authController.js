@@ -213,6 +213,7 @@ exports.resendOtp = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
+    
 
     const { email } = req.body;
 
