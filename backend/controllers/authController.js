@@ -28,6 +28,14 @@ const sendWelcomeEmail = async (email, name) => {
       },
     });
 
+    transporter.verify(function (error, success) {
+  if (error) {
+    console.log("SMTP ERROR:", error);
+  } else {
+    console.log("SMTP server ready");
+  }
+});
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
