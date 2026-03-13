@@ -84,8 +84,8 @@ const sendBloodRequestEmails = async ({ donors, bloodRequest, bloodGroup, patien
       );
     });
 
-  const emailResults = await Promise.allSettled(emailPromises);
-  const sentCount = emailResults.filter((r) => r.status === "fulfilled").length;
+  const emailResults = await Promise.all(emailPromises);
+  const sentCount = emailResults.filter(Boolean).length;
   const failedCount = emailResults.length - sentCount;
 
   return { sentCount, failedCount };

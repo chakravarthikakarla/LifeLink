@@ -26,6 +26,7 @@ const sendForgotEmail = async (to, otp) => {
       `,
     });
     console.log("Forgot password email sent:", info.messageId);
+    return true;
   } catch (error) {
     console.error("Forgot password email error:", {
       to,
@@ -33,7 +34,7 @@ const sendForgotEmail = async (to, otp) => {
       code: error.code,
       response: error.response,
     });
-    throw error;
+    return false;
   }
 };
 

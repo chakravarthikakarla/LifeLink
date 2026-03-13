@@ -106,7 +106,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    await sendEmail(
+    const otpSent = await sendEmail(
       email,
       "LifeLink - Verify Your Email",
       `
@@ -116,6 +116,10 @@ exports.register = async (req, res) => {
       <p>This OTP is valid for 10 minutes.</p>
       `
     );
+
+    if (!otpSent) {
+      return res.status(502).json({ message: "Unable to send verification email. Check SMTP configuration on the server." });
+    }
 
     res.status(201).json({
       message: "User registered. Verify OTP.",
@@ -281,11 +285,15 @@ exports.resendOtp = async (req, res) => {
 
     await user.save();
 
-    await sendEmail(
+    const resendSent = await sendEmail(
       user.email,
       "LifeLink - Resend OTP",
       `<h2>Your OTP is: ${otp}</h2>`
     );
+
+    if (!resendSent) {
+      return res.status(502).json({ message: "Unable to resend OTP email. Check SMTP configuration on the server." });
+    }
 
     res.status(200).json({
       message: "OTP resent successfully"
@@ -315,7 +323,11 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    await sendForgotEmail(email, otp);
+    const forgotSent = await sendForgotEmail(email, otp);
+
+    if (!forgotSent) {
+      return res.status(502).json({ message: "Unable to send password reset email. Check SMTP configuration on the server." });
+    }
 
     res.status(200).json({
       message: "OTP sent to your email"
