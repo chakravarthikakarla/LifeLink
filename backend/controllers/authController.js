@@ -6,6 +6,12 @@ const { OAuth2Client } = require("google-auth-library");
 const nodemailer = require("nodemailer");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log(
+  "EMAIL_APP_PASSWORD:",
+  process.env.EMAIL_APP_PASSWORD ? "Loaded" : "Missing"
+);
 // helper function to generate 4-digit OTP
 const generateOTP = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -378,6 +384,7 @@ exports.googleLogin = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
   try {
+    console.log("Forgot password request:", req.body);
     const { email } = req.body;
 
     if (!email) {
@@ -418,6 +425,8 @@ exports.forgotPassword = async (req, res) => {
 
     res.status(200).json({ message: "OTP sent to your email" });
   } catch (error) {
+
+    console.error("Forgot Password Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
