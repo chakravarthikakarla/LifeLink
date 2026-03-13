@@ -17,6 +17,7 @@ router.post("/resend-otp", resendOtp);
 router.post("/google", googleLogin);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.get("/test-email", require("../controllers/authController").testEmail);
 
 
 module.exports = router;

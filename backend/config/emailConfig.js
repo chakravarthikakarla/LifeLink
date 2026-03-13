@@ -1,13 +1,20 @@
 const nodemailer = require("nodemailer");
 
+if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
+  console.error("CRITICAL: EMAIL_USER or EMAIL_APP_PASSWORD environment variables are missing!");
+}
+
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Use SSL
+  port: 587,
+  secure: false, // Use STARTTLS
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
+  tls: {
+    rejectUnauthorized: false // Helps in some environments
+  }
 });
 
 // Verify connection configuration

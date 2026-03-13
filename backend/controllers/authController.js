@@ -396,6 +396,27 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+exports.testEmail = async (req, res) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER, // Send to self
+      subject: "LifeLink - SMTP Test Email",
+      text: "If you are reading this, your SMTP configuration is working correctly!",
+    };
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: "Test email sent successfully!" });
+  } catch (error) {
+    console.error("SMTP Test Error:", error);
+    res.status(500).json({ 
+      message: "SMTP Test Failed", 
+      error: error.message,
+      code: error.code,
+      command: error.command
+    });
+  }
+};
+
 exports.resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
