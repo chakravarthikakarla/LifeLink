@@ -117,8 +117,10 @@ exports.register = async (req, res) => {
       `
     );
 
-    if (!otpSent) {
-      return res.status(502).json({ message: "Unable to send verification email. Check SMTP configuration on the server." });
+    if (!otpSent?.ok) {
+      return res.status(502).json({
+        message: `Unable to send verification email (${otpSent?.error?.code || "SMTP_ERROR"}). Check SMTP configuration on the server.`,
+      });
     }
 
     res.status(201).json({
@@ -291,8 +293,10 @@ exports.resendOtp = async (req, res) => {
       `<h2>Your OTP is: ${otp}</h2>`
     );
 
-    if (!resendSent) {
-      return res.status(502).json({ message: "Unable to resend OTP email. Check SMTP configuration on the server." });
+    if (!resendSent?.ok) {
+      return res.status(502).json({
+        message: `Unable to resend OTP email (${resendSent?.error?.code || "SMTP_ERROR"}). Check SMTP configuration on the server.`,
+      });
     }
 
     res.status(200).json({
@@ -325,8 +329,10 @@ exports.forgotPassword = async (req, res) => {
 
     const forgotSent = await sendForgotEmail(email, otp);
 
-    if (!forgotSent) {
-      return res.status(502).json({ message: "Unable to send password reset email. Check SMTP configuration on the server." });
+    if (!forgotSent?.ok) {
+      return res.status(502).json({
+        message: `Unable to send password reset email (${forgotSent?.error?.code || "SMTP_ERROR"}). Check SMTP configuration on the server.`,
+      });
     }
 
     res.status(200).json({

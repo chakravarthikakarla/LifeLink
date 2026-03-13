@@ -1,18 +1,7 @@
-const transporter = require("../config/emailConfig");
+const { sendMailWithFallback } = require("../config/emailConfig");
 
 const sendForgotEmail = async (to, otp) => {
-  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const fromAddress = process.env.EMAIL_FROM || smtpUser;
-  const fromName = process.env.EMAIL_FROM_NAME || "LifeLink";
-
-  if (!transporter || !fromAddress) {
-    console.log("Skipping forgot password email (Gmail not configured).");
-    return;
-  }
-
-  try {
-    const info = await transporter.sendMail({
-      from: `"${fromName}" <${fromAddress}>`,
+  const result = await sendMailWithFallback({
       to,
       subject: "LifeLink - Password Reset OTP",
       html: `
@@ -24,18 +13,20 @@ const sendForgotEmail = async (to, otp) => {
           <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
         </div>
       `,
-    });
-    console.log("Forgot password email sent:", info.messageId);
-    return true;
-  } catch (error) {
+  });
+
+  if (!result.ok) {
     console.error("Forgot password email error:", {
       to,
-      message: error.message,
-      code: error.code,
-      response: error.response,
+      message: result.error?.message,
+      code: result.error?.code,
+      response: result.error?.response,
+      via: result.error?.via,
     });
-    return false;
+    return result;
   }
+
+  return result;
 };
 
 module.exports = sendForgotEmail;
