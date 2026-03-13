@@ -1,32 +1,32 @@
-const { Resend } = require("resend");
-
-let resend = null;
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-} else {
-  console.warn(
-    "RESEND_API_KEY is not set. Email sending is disabled (this is expected in local dev unless you configure resend)."
-  );
-}
+const transporter = require("../config/emailConfig");
 
 const sendEmail = async (to, subject, html) => {
-  if (!resend) {
-    // No email provider configured; log and skip sending.
-    console.log("Skipping email send (no RESEND_API_KEY):", { to, subject });
+  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const fromAddress = process.env.EMAIL_FROM || smtpUser;
+  const fromName = process.env.EMAIL_FROM_NAME || "LifeLink";
+
+  if (!transporter || !fromAddress) {
+    console.log("Skipping email (SMTP not configured):", { to, subject });
     return;
   }
 
   try {
-    const response = await resend.emails.send({
-      from: "LifeLink <onboarding@resend.dev>",
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${fromAddress}>`,
       to,
       subject,
       html,
     });
-
-    console.log("Email sent successfully:", response);
+    console.log("Email sent:", info.messageId);
   } catch (error) {
-    console.error("Email sending error:", error);
+    console.error("Email sending error:", {
+      to,
+      subject,
+      message: error.message,
+      code: error.code,
+      response: error.response,
+    });
+    throw error;
   }
 };
 

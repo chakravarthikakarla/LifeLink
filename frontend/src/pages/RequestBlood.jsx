@@ -50,8 +50,12 @@ const RequestBlood = () => {
       });
 
       const matched = res.data.matchedDonors ?? 0;
+      const sent = res.data.emailSent ?? 0;
+      const failed = res.data.emailFailed ?? 0;
       toast.success(
-        `Blood request submitted successfully!\n${matched > 0 ? `✅ ${matched} matching donor(s) have been notified.` : "ℹ️ No matching donors found right now."}`,
+        `Blood request submitted successfully!\n${matched > 0
+          ? `🔎 ${matched} matching donor(s) found. 📧 Sent: ${sent}${failed > 0 ? `, Failed: ${failed}` : ""}`
+          : "ℹ️ No matching donors found right now."}`,
         { duration: 5000 }
       );
       navigate("/my-requests");

@@ -76,6 +76,42 @@ const MyRequests = () => {
         setModalOpen(true);
     };
 
+    const handleMarkDonationDone = (requestId, donorId, donorName) => {
+        const unitsInput = window.prompt(`Enter donated units for ${donorName || "this donor"}:`, "1");
+        if (unitsInput === null) return;
+
+        const donatedUnits = Number(unitsInput);
+        if (!Number.isFinite(donatedUnits) || donatedUnits <= 0) {
+            toast.error("Please enter a valid units value greater than 0");
+            return;
+        }
+
+        setModalConfig({
+            title: "Confirm Donation Done",
+            message: `Mark donation as completed with ${donatedUnits} unit(s)?`,
+            type: "confirm",
+            onConfirm: async () => {
+                try {
+                    const res = await axios.post("/blood/donation-done", {
+                        requestId,
+                        donorId,
+                        donatedUnits,
+                    });
+
+                    toast.success(
+                        `Updated. Remaining units: ${res.data.remainingUnits}.` +
+                        (res.data.renotifySent ? ` Re-notified: ${res.data.renotifySent}` : "")
+                    );
+                    fetchRequests();
+                    setModalOpen(false);
+                } catch (error) {
+                    toast.error(error.response?.data?.message || "Failed to update donation status");
+                }
+            },
+        });
+        setModalOpen(true);
+    };
+
     if (loading) {
         return (
             <div className="min-h-[calc(100vh-96px)] bg-gray-50 px-6 md:px-20 py-10">
@@ -233,13 +269,15 @@ const MyRequests = () => {
                                     request.acceptedDonors.length > 0 && (
                                         <div className="border rounded-lg overflow-hidden">
                                             {/* Table Header */}
-                                            <div className="grid grid-cols-7 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
+                                            <div className="grid grid-cols-9 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
                                                 <span>#</span>
                                                 <span>Name</span>
                                                 <span>Blood Group</span>
                                                 <span>Phone</span>
                                                 <span>Gender</span>
                                                 <span>Accepted At</span>
+                                                <span>Donation</span>
+                                                <span>Units</span>
                                                 <span>Action</span>
                                             </div>
 
@@ -247,7 +285,7 @@ const MyRequests = () => {
                                             {request.acceptedDonors.map((donor, index) => (
                                                 <div
                                                     key={index}
-                                                    className="grid grid-cols-7 px-4 py-3 text-sm border-t items-center"
+                                                    className="grid grid-cols-9 px-4 py-3 text-sm border-t items-center"
                                                 >
                                                     <span className="text-gray-500">{index + 1}</span>
                                                     <span className="font-medium">{donor.name}</span>
@@ -264,15 +302,31 @@ const MyRequests = () => {
                                                             minute: "2-digit",
                                                         })}
                                                     </span>
-                                                    <button
-                                                        onClick={() => navigate(`/chat/${request._id}/${donor._id}`)}
-                                                        className="text-[#6a0026] hover:bg-[#6a0026] hover:text-white border border-[#6a0026] px-3 py-1 rounded-md text-xs font-medium transition whitespace-nowrap relative group"
-                                                    >
-                                                        💬 Chat
-                                                        {donor.unreadCount > 0 && (
-                                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 border-2 border-white rounded-full animate-pulse shadow-sm"></span>
-                                                        )}
-                                                    </button>
+                                                    <span className={`text-xs font-semibold ${donor.donationDone ? "text-green-700" : "text-gray-500"}`}>
+                                                        {donor.donationDone ? "Yes" : "No"}
+                                                    </span>
+                                                    <span className="text-sm">{donor.donatedUnits || "-"}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => navigate(`/chat/${request._id}/${donor._id}`)}
+                                                            className="text-[#6a0026] hover:bg-[#6a0026] hover:text-white border border-[#6a0026] px-3 py-1 rounded-md text-xs font-medium transition whitespace-nowrap relative group"
+                                                        >
+                                                            💬 Chat
+                                                            {donor.unreadCount > 0 && (
+                                                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 border-2 border-white rounded-full animate-pulse shadow-sm"></span>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            disabled={request.status !== "active" || donor.donationDone}
+                                                            onClick={() => handleMarkDonationDone(request._id, donor._id, donor.name)}
+                                                            className={`px-3 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${request.status !== "active" || donor.donationDone
+                                                                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                                                    : "bg-green-600 text-white hover:bg-green-700"
+                                                                }`}
+                                                        >
+                                                            Donation Done
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>

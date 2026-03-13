@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 
-const { createBloodRequest, getMyRequests, closeBloodRequest, getAllActiveRequests, getRequestById, getUnreadAlertCount, markAlertsAsViewed } = require("../controllers/bloodController");
+const { createBloodRequest, getMyRequests, markDonationDone, closeBloodRequest, getAllActiveRequests, getRequestById, getUnreadAlertCount, markAlertsAsViewed } = require("../controllers/bloodController");
 const authMiddleware = require("../middleware/authMiddleware");
 
 router.post("/request", authMiddleware, createBloodRequest);
 router.get("/my-requests", authMiddleware, getMyRequests);
+router.post("/donation-done", authMiddleware, markDonationDone);
 router.post("/close", authMiddleware, closeBloodRequest);
 router.get("/all", authMiddleware, getAllActiveRequests);
 router.get("/request/:id", authMiddleware, getRequestById);

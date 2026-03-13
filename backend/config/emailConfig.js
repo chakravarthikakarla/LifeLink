@@ -1,30 +1,48 @@
 const nodemailer = require("nodemailer");
 
-if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
-  console.error("CRITICAL: EMAIL_USER or EMAIL_APP_PASSWORD environment variables are missing!");
+const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+const smtpPort = Number(process.env.SMTP_PORT || 465);
+const smtpSecure = process.env.SMTP_SECURE
+  ? process.env.SMTP_SECURE === "true"
+  : smtpPort === 465;
+
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD;
+
+const isEmailConfigured = Boolean(smtpUser && smtpPass);
+
+if (!isEmailConfigured) {
+  console.warn("Email service disabled: set SMTP_USER/SMTP_PASS (or EMAIL_USER/EMAIL_APP_PASSWORD).");
 }
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Use SSL/TLS
-  family: 4,    // Forces IPv4
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 20000
-});
+const transporter = isEmailConfigured
+  ? nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+    })
+  : null;
 
-// Verify connection configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("SMTP Connection Error:", error);
-  } else {
-    console.log("SMTP server is ready to take our messages");
-  }
-});
+if (transporter && process.env.NODE_ENV !== "test") {
+  transporter
+    .verify()
+    .then(() => {
+      console.log(`SMTP ready (${smtpHost}:${smtpPort}, secure=${smtpSecure})`);
+    })
+    .catch((error) => {
+      console.error("SMTP verify failed:", {
+        message: error.message,
+        code: error.code,
+        response: error.response,
+      });
+    });
+}
 
 module.exports = transporter;

@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const sendEmail = require("../utils/sendEmail");
+const sendForgotEmail = require("../utils/sendForgotEmail");
 const generateToken = require("../utils/generateToken");
 const { OAuth2Client } = require("google-auth-library");
 
@@ -14,6 +15,8 @@ const generateOTP = () => {
 // Send welcome email
 const sendWelcomeEmail = async (email, name) => {
   try {
+    const loginLink = `${(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "")}/login`;
+
     await sendEmail(
       email,
       "Welcome to LifeLink! Registration Successful",
@@ -28,14 +31,30 @@ const sendWelcomeEmail = async (email, name) => {
         </p>
 
         <p>
-        Thank you for joining our noble cause. Your participation in LifeLink can help save lives by
+        A special vote of thanks for joining our noble cause. Your participation in LifeLink can help save lives by
         connecting blood donors with those in need. Every drop counts!
         </p>
 
+        <div style="background:#f8f9fa; padding:14px; border-radius:6px; margin:16px 0;">
+          <p style="margin:0 0 8px 0;"><strong>Your login credentials:</strong></p>
+          <p style="margin:0;"><strong>Email:</strong> ${email}</p>
+          <p style="margin:8px 0 0 0;"><strong>Password:</strong> The password you created during registration</p>
+        </div>
+
         <p>
-        You can now log in to your account and complete your profile, request blood,
-        or register as a donor.
+        Please log in with the above credentials and add your profile details (name, phone, blood group, address, etc.)
+        to activate all features.
         </p>
+
+        <p>
+        Once your details are completed, you can request blood, respond to alerts, and register as an active donor.
+        </p>
+
+        <div style="text-align:center; margin:24px 0;">
+          <a href="${loginLink}" style="background:#d9534f; color:#fff; text-decoration:none; padding:12px 24px; border-radius:6px; font-weight:600; display:inline-block;">
+            Login to LifeLink
+          </a>
+        </div>
 
         <br/>
 
@@ -296,11 +315,7 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    await sendEmail(
-      email,
-      "LifeLink - Password Reset OTP",
-      `<h2>Your OTP: ${otp}</h2><p>Valid for 10 minutes</p>`
-    );
+    await sendForgotEmail(email, otp);
 
     res.status(200).json({
       message: "OTP sent to your email"

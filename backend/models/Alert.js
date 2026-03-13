@@ -23,6 +23,17 @@ const alertSchema = new mongoose.Schema({
       type: Date,
       default: Date.now,
     },
+    donationDone: {
+      type: Boolean,
+      default: false,
+    },
+    donatedUnits: {
+      type: Number,
+      default: 0,
+    },
+    donationDate: {
+      type: Date,
+    },
   }],
   rejectedDonors: [{
     type: mongoose.Schema.Types.ObjectId,

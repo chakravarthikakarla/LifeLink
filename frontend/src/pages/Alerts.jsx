@@ -251,11 +251,19 @@ const Alerts = () => {
                 ) : (
                   <>
                     <button
+                      disabled={alert.canAccept === false}
                       onClick={() => handleAccept(alert._id)}
-                      className="bg-black text-white px-6 py-2 rounded-lg hover:opacity-90 transition font-semibold"
+                      title={alert.canAccept === false ? alert.acceptDisabledReason || "Cannot accept right now" : ""}
+                      className={`px-6 py-2 rounded-lg transition font-semibold ${alert.canAccept === false ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-black text-white hover:opacity-90"}`}
                     >
                       Accept
                     </button>
+
+                    {alert.canAccept === false && alert.acceptDisabledReason && (
+                      <p className="text-[11px] text-gray-500 max-w-[180px] text-right">
+                        {alert.acceptDisabledReason}
+                      </p>
+                    )}
 
                     <button
                       onClick={() => handleReject(alert._id)}

@@ -2,6 +2,17 @@ const mongoose = require("mongoose");
 const Alert = require("../models/Alert");
 const BloodRequest = require("../models/BloodRequest");
 const Message = require("../models/Message");
+const User = require("../models/User");
+const sendEmail = require("../utils/sendEmail");
+
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+
+const isWithinDonationCooldown = (lastDonationDate) => {
+  if (!lastDonationDate) return false;
+  const last = new Date(lastDonationDate).getTime();
+  if (Number.isNaN(last)) return false;
+  return Date.now() - last < NINETY_DAYS_MS;
+};
 
 // 🔔 Get alerts globally for logged-in user
 const getAlerts = async (req, res) => {
@@ -49,9 +60,15 @@ const getAlerts = async (req, res) => {
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
     const currentUserId = req.user._id.toString();
+    const userOnCooldown = isWithinDonationCooldown(req.user.profile?.lastDonationDate);
 
     alerts = alerts.filter((alert) => {
       if (!alert.bloodRequest) return false;
+
+      const isTargetedDonor = alert.donors?.some((id) => id.toString() === currentUserId);
+      const hasAccepted = alert.acceptedDonors?.some((d) => d.user?.toString() === currentUserId);
+      const hasRejected = alert.rejectedDonors?.some((id) => id.toString() === currentUserId);
+      if (!isTargetedDonor && !hasAccepted && !hasRejected) return false;
       
       // 🚫 Exclude requester from seeing their own alerts
       const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
@@ -85,6 +102,11 @@ const getAlerts = async (req, res) => {
           });
         } else {
           obj.unreadCount = 0;
+        }
+
+        obj.canAccept = !accepted && !obj.rejectedDonors?.some((id) => id.toString() === obj._myId) && obj.bloodRequest?.status === "active" && !userOnCooldown;
+        if (!obj.canAccept && userOnCooldown && obj.bloodRequest?.status === "active") {
+          obj.acceptDisabledReason = "You donated recently. You can accept again after 90 days.";
         }
 
         return obj;
@@ -129,12 +151,58 @@ const acceptAlert = async (req, res) => {
       return res.status(400).json({ message: "You have already rejected this request" });
     }
 
+    if (isWithinDonationCooldown(req.user.profile?.lastDonationDate)) {
+      return res.status(400).json({ message: "You donated recently and cannot accept requests for 90 days" });
+    }
+
     alert.acceptedDonors.push({
       user: req.user._id,
       acceptedAt: new Date(),
     });
 
     await alert.save();
+
+    // Notify requester by email when a donor accepts
+    try {
+      const requester = await User.findById(alert.bloodRequest.requester).select("email profile.name");
+      if (requester?.email) {
+        const donorName = req.user.profile?.name || req.user.email || "A donor";
+        const requiredDateStr = new Date(alert.bloodRequest.requiredDate).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+        const requestLink = `${process.env.FRONTEND_URL}/my-requests`;
+
+        const html = `
+          <div style="font-family: Arial, sans-serif; line-height:1.6; max-width:600px; margin:auto; border:1px solid #ddd; padding:20px; border-radius:8px;">
+            <h2 style="color:#198754;">✅ Donor Accepted Your Blood Request</h2>
+            <p>Dear ${requester.profile?.name || "Requester"},</p>
+            <p><strong>${donorName}</strong> has accepted your blood request.</p>
+            <div style="background:#f8f9fa; padding:15px; border-radius:6px;">
+              <p><strong>Patient:</strong> ${alert.bloodRequest.patientName}</p>
+              <p><strong>Blood Group:</strong> ${alert.bloodRequest.bloodGroup}</p>
+              <p><strong>Units Needed:</strong> ${alert.bloodRequest.units}</p>
+              <p><strong>Required By:</strong> ${requiredDateStr}</p>
+            </div>
+            <div style="text-align:center; margin:24px 0;">
+              <a href="${requestLink}" style="background:#198754;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;">
+                Open My Requests
+              </a>
+            </div>
+            <p>Thank you for using LifeLink.</p>
+          </div>
+        `;
+
+        await sendEmail(
+          requester.email,
+          "LifeLink: A donor accepted your request",
+          html
+        );
+      }
+    } catch (emailError) {
+      console.error("Requester acceptance email failed:", emailError.message);
+    }
 
     // Notify the requester via Socket.io so their MyRequests page auto-refreshes
     const io = req.app.get("io");
@@ -152,30 +220,8 @@ const acceptAlert = async (req, res) => {
       });
     }
 
-    // Auto-close if accepted donors count >= required units
-    const requiredUnits = alert.bloodRequest.units || 1;
-    if (alert.acceptedDonors.length >= requiredUnits) {
-      alert.bloodRequest.status = "closed";
-      alert.bloodRequest.closedAt = new Date();
-      await alert.bloodRequest.save();
-
-      // Extend alert expiry to 24h from now
-      alert.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await alert.save();
-
-      // Notify others that the alert is now closed (global update)
-      if (io) {
-        io.emit("notification_update", { type: "alert" });
-      }
-
-      return res.status(200).json({
-        message: "You accepted the request. All units fulfilled — request is now closed!",
-        requestClosed: true,
-      });
-    }
-
     res.status(200).json({
-      message: `You accepted the request. ${requiredUnits - alert.acceptedDonors.length} more donor(s) needed.`,
+      message: "You accepted the request.",
       requestClosed: false,
     });
   } catch (error) {
