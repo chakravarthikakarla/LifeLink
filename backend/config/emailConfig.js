@@ -8,12 +8,13 @@ const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
   secure: false, // Use STARTTLS
+  family: 4,   // Forces IPv4
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
   tls: {
-    rejectUnauthorized: false // Helps in some environments
+    rejectUnauthorized: false
   }
 });
 
