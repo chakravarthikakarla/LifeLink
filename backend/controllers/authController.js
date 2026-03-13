@@ -166,14 +166,81 @@ exports.login = async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       token,
+      profileCompleted: user.profileCompleted,
       user: {
         id: user._id,
-        email: user.email
+        email: user.email,
+        profileCompleted: user.profileCompleted,
+        profile: user.profile
       }
     });
 
   } catch (error) {
     console.log("Login error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Google Sign-in (OAuth)
+exports.googleAuth = async (req, res) => {
+  try {
+    const { tokenId } = req.body;
+
+    if (!tokenId) {
+      return res.status(400).json({ message: "Google token is required" });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: tokenId,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload?.email;
+    const name = payload?.name;
+    const picture = payload?.picture;
+    const googleId = payload?.sub;
+
+    if (!email) {
+      return res.status(400).json({ message: "Google login failed" });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (user) {
+      // Attach googleId if missing
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.isVerified = true;
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        email,
+        googleId,
+        isVerified: true,
+        profile: {
+          name,
+          photo: picture,
+        },
+      });
+    }
+
+    const token = generateToken(user._id);
+
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      profileCompleted: user.profileCompleted,
+      user: {
+        id: user._id,
+        email: user.email,
+        profileCompleted: user.profileCompleted,
+        profile: user.profile,
+      },
+    });
+  } catch (error) {
+    console.log("Google login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
