@@ -73,6 +73,7 @@ const Navbar = () => {
       : "text-gray-700"}`;
 
   return (
+    <>
     <nav className="fixed top-0 left-0 w-full z-50
                     flex items-center justify-between
                     px-10 md:px-20 py-5 bg-white/70 backdrop-blur-md
@@ -123,6 +124,8 @@ const Navbar = () => {
         </button>
       </div>
 
+    </nav>
+
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -131,7 +134,7 @@ const Navbar = () => {
         type="confirm"
         onConfirm={confirmLogout}
       />
-    </nav>
+    </>
   );
 };
 

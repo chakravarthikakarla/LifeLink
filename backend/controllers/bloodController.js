@@ -6,6 +6,7 @@ const Message = require("../models/Message");
 const sendEmail = require("../utils/sendEmail");
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+const ONE_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
 
 const isWithinDonationCooldown = (lastDonationDate) => {
   if (!lastDonationDate) return false;
@@ -125,18 +126,22 @@ const createBloodRequest = async (req, res) => {
     const escapedBloodGroup = normalizedBloodGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     const ninetyDaysAgo = new Date(Date.now() - NINETY_DAYS_MS);
+    const oneHundredTwentyDaysAgo = new Date(Date.now() - ONE_TWENTY_DAYS_MS);
 
-    // Find matching donors: same blood group, verified, available, out of 90-day cooldown
+    // Find matching donors: same blood group, age >= 18, verified, available, out of gender-based cooldown
     const matchingDonors = await User.find({
       _id: { $ne: req.user._id },
       isVerified: true,
       profileCompleted: true,
       "profile.availableToDonate": true,
       "profile.bloodGroup": { $regex: `^${escapedBloodGroup}$`, $options: "i" },
+      "profile.age": { $gte: 18 },
       $or: [
         { "profile.lastDonationDate": { $exists: false } },
         { "profile.lastDonationDate": null },
-        { "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
+        { "profile.gender": "Male", "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
+        { "profile.gender": "Female", "profile.lastDonationDate": { $lt: oneHundredTwentyDaysAgo } },
+        { "profile.gender": { $nin: ["Male", "Female"] }, "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
       ],
     });
 
@@ -193,9 +198,15 @@ const createBloodRequest = async (req, res) => {
 // Get current user's blood requests with accepted donor details and unread message counts
 const getMyRequests = async (req, res) => {
   try {
-    // Get all blood requests made by this user
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Get all active requests and recently closed requests (within 24 hours)
     const requests = await BloodRequest.find({
       requester: req.user._id,
+      $or: [
+        { status: "active" },
+        { status: "closed", closedAt: { $gte: twentyFourHoursAgo } },
+      ],
     }).sort({ createdAt: -1 });
 
     // For each request, find the alert and get accepted donors
@@ -323,6 +334,7 @@ const markDonationDone = async (req, res) => {
       const normalizedBloodGroup = String(request.bloodGroup).trim();
       const escapedBloodGroup = normalizedBloodGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const ninetyDaysAgo = new Date(Date.now() - NINETY_DAYS_MS);
+      const oneHundredTwentyDaysAgo = new Date(Date.now() - ONE_TWENTY_DAYS_MS);
 
       const excludedIds = [
         req.user._id,
@@ -336,10 +348,13 @@ const markDonationDone = async (req, res) => {
         profileCompleted: true,
         "profile.availableToDonate": true,
         "profile.bloodGroup": { $regex: `^${escapedBloodGroup}$`, $options: "i" },
+        "profile.age": { $gte: 18 },
         $or: [
           { "profile.lastDonationDate": { $exists: false } },
           { "profile.lastDonationDate": null },
-          { "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
+          { "profile.gender": "Male", "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
+          { "profile.gender": "Female", "profile.lastDonationDate": { $lt: oneHundredTwentyDaysAgo } },
+          { "profile.gender": { $nin: ["Male", "Female"] }, "profile.lastDonationDate": { $lt: ninetyDaysAgo } },
         ],
       });
 
@@ -475,6 +490,11 @@ const getUnreadAlertCount = async (req, res) => {
 
     const unreadAlerts = recentAlerts.filter(alert => {
       if (!alert.bloodRequest) return false;
+
+      // Exclude under-18 users
+      const userAge = user.profile?.age;
+      if (!userAge || userAge < 18) return false;
+
       const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
       const isRequester = requesterId === currentUserId;
       

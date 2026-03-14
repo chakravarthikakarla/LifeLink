@@ -6,12 +6,14 @@ const User = require("../models/User");
 const sendEmail = require("../utils/sendEmail");
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+const ONE_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
 
-const isWithinDonationCooldown = (lastDonationDate) => {
+const isWithinDonationCooldown = (lastDonationDate, gender) => {
   if (!lastDonationDate) return false;
   const last = new Date(lastDonationDate).getTime();
   if (Number.isNaN(last)) return false;
-  return Date.now() - last < NINETY_DAYS_MS;
+  const cooldownMs = gender === "Female" ? ONE_TWENTY_DAYS_MS : NINETY_DAYS_MS;
+  return Date.now() - last < cooldownMs;
 };
 
 // 🔔 Get alerts globally for logged-in user
@@ -60,10 +62,16 @@ const getAlerts = async (req, res) => {
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
     const currentUserId = req.user._id.toString();
-    const userOnCooldown = isWithinDonationCooldown(req.user.profile?.lastDonationDate);
+    const userGender = req.user.profile?.gender;
+    const userAge = req.user.profile?.age;
+    const userOnCooldown = isWithinDonationCooldown(req.user.profile?.lastDonationDate, userGender);
+    const userUnderAge = !userAge || userAge < 18;
 
     alerts = alerts.filter((alert) => {
       if (!alert.bloodRequest) return false;
+
+      // 🚫 Exclude under-18 users from seeing any alerts
+      if (userUnderAge) return false;
 
       const isTargetedDonor = alert.donors?.some((id) => id.toString() === currentUserId);
       const hasAccepted = alert.acceptedDonors?.some((d) => d.user?.toString() === currentUserId);
@@ -104,9 +112,14 @@ const getAlerts = async (req, res) => {
           obj.unreadCount = 0;
         }
 
-        obj.canAccept = !accepted && !obj.rejectedDonors?.some((id) => id.toString() === obj._myId) && obj.bloodRequest?.status === "active" && !userOnCooldown;
-        if (!obj.canAccept && userOnCooldown && obj.bloodRequest?.status === "active") {
-          obj.acceptDisabledReason = "You donated recently. You can accept again after 90 days.";
+        obj.canAccept = !accepted && !obj.rejectedDonors?.some((id) => id.toString() === obj._myId) && obj.bloodRequest?.status === "active" && !userOnCooldown && !userUnderAge;
+        if (!obj.canAccept && obj.bloodRequest?.status === "active") {
+          if (userUnderAge) {
+            obj.acceptDisabledReason = "You must be at least 18 years old to donate.";
+          } else if (userOnCooldown) {
+            const cooldownDays = userGender === "Female" ? 120 : 90;
+            obj.acceptDisabledReason = `You donated recently. You can accept again after ${cooldownDays} days.`;
+          }
         }
 
         return obj;

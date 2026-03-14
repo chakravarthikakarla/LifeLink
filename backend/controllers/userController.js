@@ -55,13 +55,6 @@ const updateUserProfile = async (req, res) => {
       user.profile.age = age;
     }
 
-    // Age validation
-    if (user.profile.age !== undefined && user.profile.age < 18) {
-      return res.status(400).json({
-        message: "You must be at least 18 years old to be a donor",
-      });
-    }
-
     // ✅ Check profile completion
     const profile = user.profile;
 

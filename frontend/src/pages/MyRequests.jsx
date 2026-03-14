@@ -17,6 +17,9 @@ const MyRequests = () => {
         type: "confirm",
         onConfirm: () => { },
     });
+    const [unitsModalOpen, setUnitsModalOpen] = useState(false);
+    const [unitsInput, setUnitsInput] = useState("1");
+    const [unitsPending, setUnitsPending] = useState({ requestId: null, donorId: null, donorName: "" });
 
     const fetchRequests = async () => {
         try {
@@ -77,15 +80,18 @@ const MyRequests = () => {
     };
 
     const handleMarkDonationDone = (requestId, donorId, donorName) => {
-        const unitsInput = window.prompt(`Enter donated units for ${donorName || "this donor"}:`, "1");
-        if (unitsInput === null) return;
+        setUnitsPending({ requestId, donorId, donorName });
+        setUnitsInput("1");
+        setUnitsModalOpen(true);
+    };
 
+    const handleUnitsSubmit = () => {
         const donatedUnits = Number(unitsInput);
         if (!Number.isFinite(donatedUnits) || donatedUnits <= 0) {
             toast.error("Please enter a valid units value greater than 0");
             return;
         }
-
+        setUnitsModalOpen(false);
         setModalConfig({
             title: "Confirm Donation Done",
             message: `Mark donation as completed with ${donatedUnits} unit(s)?`,
@@ -93,11 +99,10 @@ const MyRequests = () => {
             onConfirm: async () => {
                 try {
                     const res = await axios.post("/blood/donation-done", {
-                        requestId,
-                        donorId,
+                        requestId: unitsPending.requestId,
+                        donorId: unitsPending.donorId,
                         donatedUnits,
                     });
-
                     toast.success(
                         `Updated. Remaining units: ${res.data.remainingUnits}.` +
                         (res.data.renotifySent ? ` Re-notified: ${res.data.renotifySent}` : "")
@@ -269,32 +274,33 @@ const MyRequests = () => {
                                     request.acceptedDonors.length > 0 && (
                                         <div className="border rounded-lg overflow-hidden">
                                             {/* Table Header */}
-                                            <div className="grid grid-cols-9 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 uppercase">
-                                                <span>#</span>
-                                                <span>Name</span>
-                                                <span>Blood Group</span>
-                                                <span>Phone</span>
-                                                <span>Gender</span>
-                                                <span>Accepted At</span>
-                                                <span>Donation</span>
-                                                <span>Units</span>
-                                                <span>Action</span>
+                                            <div className="grid bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 uppercase gap-3" style={{gridTemplateColumns: '2rem 2fr 1fr 1.2fr 0.8fr 1.3fr 0.8fr 0.6fr 14rem'}}>
+                                                <span className="text-center">#</span>
+                                                <span className="text-center">Name</span>
+                                                <span className="text-center">Blood Group</span>
+                                                <span className="text-center">Phone</span>
+                                                <span className="text-center">Gender</span>
+                                                <span className="text-center">Accepted At</span>
+                                                <span className="text-center">Donation</span>
+                                                <span className="text-center">Units</span>
+                                                <span className="text-center">Action</span>
                                             </div>
 
                                             {/* Donor Rows */}
                                             {request.acceptedDonors.map((donor, index) => (
                                                 <div
                                                     key={index}
-                                                    className="grid grid-cols-9 px-4 py-3 text-sm border-t items-center"
+                                                    className="grid px-4 py-3 text-sm border-t items-center gap-3"
+                                                    style={{gridTemplateColumns: '2rem 2fr 1fr 1.2fr 0.8fr 1.3fr 0.8fr 0.6fr 14rem'}}
                                                 >
-                                                    <span className="text-gray-500">{index + 1}</span>
-                                                    <span className="font-medium">{donor.name}</span>
-                                                    <span className="text-[#6a0026] font-semibold">
+                                                    <span className="text-gray-500 text-center">{index + 1}</span>
+                                                    <span className="font-medium text-center">{donor.name}</span>
+                                                    <span className="text-[#6a0026] font-semibold text-center">
                                                         {donor.bloodGroup}
                                                     </span>
-                                                    <span>{donor.phone || "-"}</span>
-                                                    <span>{donor.gender || "-"}</span>
-                                                    <span className="text-gray-500 text-xs">
+                                                    <span className="text-center">{donor.phone || "-"}</span>
+                                                    <span className="text-center">{donor.gender || "-"}</span>
+                                                    <span className="text-gray-500 text-xs text-center">
                                                         {new Date(donor.acceptedAt).toLocaleString("en-GB", {
                                                             day: "2-digit",
                                                             month: "short",
@@ -302,11 +308,11 @@ const MyRequests = () => {
                                                             minute: "2-digit",
                                                         })}
                                                     </span>
-                                                    <span className={`text-xs font-semibold ${donor.donationDone ? "text-green-700" : "text-gray-500"}`}>
+                                                    <span className={`text-xs font-semibold text-center ${donor.donationDone ? "text-green-700" : "text-gray-500"}`}>
                                                         {donor.donationDone ? "Yes" : "No"}
                                                     </span>
-                                                    <span className="text-sm">{donor.donatedUnits || "-"}</span>
-                                                    <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-center">{donor.donatedUnits || "-"}</span>
+                                                    <div className="flex items-center justify-center gap-2">
                                                         <button
                                                             onClick={() => navigate(`/chat/${request._id}/${donor._id}`)}
                                                             className="text-[#6a0026] hover:bg-[#6a0026] hover:text-white border border-[#6a0026] px-3 py-1 rounded-md text-xs font-medium transition whitespace-nowrap relative group"
@@ -336,6 +342,51 @@ const MyRequests = () => {
                     </div>
                 ))}
             </div>
+
+            {/* Units Input Modal */}
+            {unitsModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
+                        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+                            <h3 className="text-lg font-bold text-gray-900">Enter Donated Units</h3>
+                            <button
+                                onClick={() => setUnitsModalOpen(false)}
+                                className="p-1 rounded-full hover:bg-gray-100 transition-colors text-gray-400"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-sm text-gray-500 mb-4">
+                                How many units did <span className="font-semibold text-gray-800">{unitsPending.donorName || "this donor"}</span> donate?
+                            </p>
+                            <input
+                                type="number"
+                                min="1"
+                                value={unitsInput}
+                                onChange={(e) => setUnitsInput(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleUnitsSubmit()}
+                                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#6a0026]"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                            <button
+                                onClick={() => setUnitsModalOpen(false)}
+                                className="px-5 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUnitsSubmit}
+                                className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#6a0026] text-white hover:opacity-90 transition-opacity"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <Modal
                 isOpen={modalOpen}

@@ -239,6 +239,7 @@ const Dashboard = () => {
                 label="DOB"
                 value={profile.dob ? profile.dob.slice(0, 10) : ""}
               />
+              <AboutRow label="Age" value={profile.age !== undefined && profile.age !== "" ? `${profile.age} yrs` : ""} />
               <AboutRow label="Blood Group" value={profile.bloodGroup} />
               <AboutRow label="Phone Number" value={profile.phone} />
               <AboutRow label="Address" value={profile.address} />
