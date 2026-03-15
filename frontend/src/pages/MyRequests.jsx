@@ -6,6 +6,15 @@ import socket from "../socket";
 import { toast } from "react-hot-toast";
 import Modal from "../components/Modal";
 
+const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
+
+const isVisibleRequest = (request) => {
+    if (request?.status !== "closed") return true;
+    if (!request?.closedAt) return false;
+
+    return Date.now() - new Date(request.closedAt).getTime() < CLOSED_REQUEST_VISIBILITY_MS;
+};
+
 const MyRequests = () => {
     const navigate = useNavigate();
     const [requests, setRequests] = useState([]);
@@ -24,7 +33,7 @@ const MyRequests = () => {
     const fetchRequests = async () => {
         try {
             const res = await axios.get("/blood/my-requests");
-            setRequests(res.data);
+            setRequests(res.data.filter(isVisibleRequest));
         } catch (error) {
             console.error("Failed to fetch requests", error);
         } finally {
@@ -42,6 +51,9 @@ const MyRequests = () => {
         }
 
         fetchRequests();
+        const refreshTimer = setInterval(() => {
+            fetchRequests();
+        }, 60 * 1000);
 
         const handleNotification = (data) => {
             const user = JSON.parse(sessionStorage.getItem("user") || "{}");
@@ -56,6 +68,7 @@ const MyRequests = () => {
         socket.on("notification_update", handleNotification);
 
         return () => {
+            clearInterval(refreshTimer);
             socket.off("notification_update", handleNotification);
         };
     }, []);
@@ -153,7 +166,7 @@ const MyRequests = () => {
             </div>
 
             {/* NO REQUESTS */}
-            {requests.length === 0 && (
+            {requests.filter(isVisibleRequest).length === 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-16 text-center">
                     <div className="text-6xl mb-4">🩸</div>
                     <h3 className="text-xl font-semibold mb-2">No Blood Requests Yet</h3>
@@ -172,7 +185,7 @@ const MyRequests = () => {
 
             {/* REQUEST CARDS */}
             <div className="space-y-6">
-                {requests.map((request) => (
+                {requests.filter(isVisibleRequest).map((request) => (
                     <div
                         key={request._id}
                         className="bg-white rounded-xl shadow-sm overflow-hidden"

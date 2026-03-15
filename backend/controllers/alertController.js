@@ -5,16 +5,10 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const sendEmail = require("../utils/sendEmail");
 
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-const ONE_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
+const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
 
-const isWithinDonationCooldown = (lastDonationDate, gender) => {
-  if (!lastDonationDate) return false;
-  const last = new Date(lastDonationDate).getTime();
-  if (Number.isNaN(last)) return false;
-  const cooldownMs = gender === "Female" ? ONE_TWENTY_DAYS_MS : NINETY_DAYS_MS;
-  return Date.now() - last < cooldownMs;
-};
+const getRequesterId = (bloodRequest) =>
+  (bloodRequest?.requester?._id || bloodRequest?.requester)?.toString();
 
 // 🔔 Get alerts globally for logged-in user
 const getAlerts = async (req, res) => {
@@ -38,10 +32,10 @@ const getAlerts = async (req, res) => {
         { $set: { status: "closed", closedAt: new Date() } }
       );
 
-      // Update associated Alerts to ensure they stay visible for 24h from now
+      // Update associated alerts so they expire 24h after closure.
       await Alert.updateMany(
         { bloodRequest: { $in: ids } },
-        { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
+        { $set: { expiresAt: new Date(Date.now() + CLOSED_REQUEST_VISIBILITY_MS) } }
       );
 
       // Notify users
@@ -58,34 +52,21 @@ const getAlerts = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // Include active requests OR closed requests that were closed within the last 24 hours
-    const oneDayAgo = new Date();
-    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    const now = Date.now();
 
     const currentUserId = req.user._id.toString();
-    const userGender = req.user.profile?.gender;
-    const userAge = req.user.profile?.age;
-    const userOnCooldown = isWithinDonationCooldown(req.user.profile?.lastDonationDate, userGender);
-    const userUnderAge = !userAge || userAge < 18;
 
     alerts = alerts.filter((alert) => {
       if (!alert.bloodRequest) return false;
-
-      // 🚫 Exclude under-18 users from seeing any alerts
-      if (userUnderAge) return false;
-
-      const isTargetedDonor = alert.donors?.some((id) => id.toString() === currentUserId);
-      const hasAccepted = alert.acceptedDonors?.some((d) => d.user?.toString() === currentUserId);
-      const hasRejected = alert.rejectedDonors?.some((id) => id.toString() === currentUserId);
-      if (!isTargetedDonor && !hasAccepted && !hasRejected) return false;
       
       // 🚫 Exclude requester from seeing their own alerts
-      const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
+      const requesterId = getRequesterId(alert.bloodRequest);
       if (requesterId === currentUserId) return false;
 
       if (alert.bloodRequest.status === "active") return true;
       if (alert.bloodRequest.status === "closed") {
-        const closedTime = alert.bloodRequest.closedAt || alert.bloodRequest.updatedAt;
-        return new Date(closedTime) > oneDayAgo;
+        if (!alert.bloodRequest.closedAt) return false;
+        return now - new Date(alert.bloodRequest.closedAt).getTime() < CLOSED_REQUEST_VISIBILITY_MS;
       }
       return false;
     });
@@ -112,15 +93,11 @@ const getAlerts = async (req, res) => {
           obj.unreadCount = 0;
         }
 
-        obj.canAccept = !accepted && !obj.rejectedDonors?.some((id) => id.toString() === obj._myId) && obj.bloodRequest?.status === "active" && !userOnCooldown && !userUnderAge;
-        if (!obj.canAccept && obj.bloodRequest?.status === "active") {
-          if (userUnderAge) {
-            obj.acceptDisabledReason = "You must be at least 18 years old to donate.";
-          } else if (userOnCooldown) {
-            const cooldownDays = userGender === "Female" ? 120 : 90;
-            obj.acceptDisabledReason = `You donated recently. You can accept again after ${cooldownDays} days.`;
-          }
-        }
+        const hasRejected = obj.rejectedDonors?.some((id) => id.toString() === obj._myId);
+        const isActive = obj.bloodRequest?.status === "active";
+
+        obj.canRespond = !accepted && !hasRejected && isActive;
+        obj.canAccept = obj.canRespond;
 
         return obj;
       })
@@ -164,8 +141,9 @@ const acceptAlert = async (req, res) => {
       return res.status(400).json({ message: "You have already rejected this request" });
     }
 
-    if (isWithinDonationCooldown(req.user.profile?.lastDonationDate)) {
-      return res.status(400).json({ message: "You donated recently and cannot accept requests for 90 days" });
+    const requesterId = getRequesterId(alert.bloodRequest);
+    if (requesterId === req.user._id.toString()) {
+      return res.status(400).json({ message: "You cannot respond to your own request" });
     }
 
     alert.acceptedDonors.push({
@@ -247,10 +225,14 @@ const rejectAlert = async (req, res) => {
   try {
     const { alertId } = req.body;
 
-    const alert = await Alert.findById(alertId);
+    const alert = await Alert.findById(alertId).populate("bloodRequest");
 
     if (!alert) {
       return res.status(404).json({ message: "Alert not found" });
+    }
+
+    if (alert.bloodRequest?.status === "closed") {
+      return res.status(400).json({ message: "Request already completed" });
     }
 
     // Check if already rejected (choice is locked)
@@ -264,6 +246,11 @@ const rejectAlert = async (req, res) => {
     );
     if (alreadyAccepted) {
       return res.status(400).json({ message: "You have already accepted this request" });
+    }
+
+    const requesterId = getRequesterId(alert.bloodRequest);
+    if (requesterId === req.user._id.toString()) {
+      return res.status(400).json({ message: "You cannot respond to your own request" });
     }
 
     alert.rejectedDonors.push(req.user._id);

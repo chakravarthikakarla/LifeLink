@@ -108,14 +108,16 @@ const VerifyOtp = () => {
   const isOtpIncomplete = otp.some((digit) => digit === "");
 
   return (
-    <div className="min-h-[calc(100vh-96px)] flex items-center justify-center bg-white">
-      <div className="w-full max-w-xl bg-white rounded-xl shadow-sm p-12 text-center">
+    <div className="min-h-[calc(100vh-96px)] flex items-center justify-center bg-white p-4">
+      <div className="w-full max-w-md bg-white border border-gray-300 rounded-xl p-8 shadow-sm">
 
-        <h2 className="text-2xl font-semibold mb-2">OTP Verification</h2>
+        <h2 className="text-2xl font-semibold text-center mb-6 text-black">
+          OTP Verification
+        </h2>
 
-        <p className="text-sm text-gray-500 mb-8">
-          An OTP has been sent to <br />
-          <span className="font-medium">your registered email</span>
+        <p className="text-sm text-gray-500 mb-6 text-center">
+          We&apos;ve sent a 4-digit code to <br />
+          <span className="font-medium text-black">your registered email</span>
         </p>
 
         {/* OTP INPUTS */}
@@ -129,23 +131,15 @@ const VerifyOtp = () => {
               value={digit}
               onChange={(e) => handleChange(e.target.value, index)}
               onKeyDown={(e) => handleKeyDown(e, index)}
-              className="
-                w-12 h-12
-                text-center
-                border border-gray-300
-                rounded-lg
-                text-lg
-                focus:outline-none
-                focus:ring-1
-                focus:ring-black
-              "
+              className="w-12 h-12 text-center border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-1 focus:ring-black"
             />
           ))}
         </div>
 
-        {/* TIMER / RESEND (FIXED POSITION UI) */}
+        {/* TIMER / RESEND */}
         <div className="mb-6 h-6 flex justify-center items-center">
           <button
+            type="button"
             onClick={handleResendOtp}
             disabled={timer > 0}
             className={`text-sm transition-all duration-200
@@ -162,7 +156,7 @@ const VerifyOtp = () => {
         <button
           onClick={handleVerify}
           disabled={isOtpIncomplete || loading}
-          className={`px-8 py-3 rounded-lg transition
+          className={`w-full py-2 rounded-md transition font-semibold
             ${isOtpIncomplete || loading
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-black text-white hover:opacity-90"
@@ -170,6 +164,16 @@ const VerifyOtp = () => {
         >
           {loading ? "Verifying..." : "Verify & Proceed"}
         </button>
+
+        <p className="text-sm text-center mt-6">
+          Wrong email?{" "}
+          <span
+            onClick={() => navigate("/register")}
+            className="text-blue-600 cursor-pointer hover:underline"
+          >
+            Back to Register
+          </span>
+        </p>
       </div>
     </div>
   );

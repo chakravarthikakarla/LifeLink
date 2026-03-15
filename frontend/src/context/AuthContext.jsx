@@ -3,23 +3,42 @@ import axios from "../services/api";
 
 const AuthContext = createContext();
 
+const getStoredItem = (key) => localStorage.getItem(key) || sessionStorage.getItem(key);
+
+const setStoredItem = (key, value) => {
+    localStorage.setItem(key, value);
+    sessionStorage.setItem(key, value);
+};
+
+const removeStoredItem = (key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+};
+
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(sessionStorage.getItem("token"));
+    const [user, setUser] = useState(() => {
+        const storedUser = getStoredItem("user");
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
+    const [token, setToken] = useState(getStoredItem("token"));
     const [loading, setLoading] = useState(true);
 
+    const logout = () => {
+        setToken(null);
+        setUser(null);
+        removeStoredItem("token");
+        removeStoredItem("user");
+        removeStoredItem("userId");
+        window.location.href = "/";
+    };
+
     useEffect(() => {
-        const storedUser = sessionStorage.getItem("user");
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-        
         const verifyUser = async () => {
             if (token) {
                 try {
                     const res = await axios.get("/user/profile");
                     setUser(res.data);
-                    sessionStorage.setItem("user", JSON.stringify(res.data));
+                    setStoredItem("user", JSON.stringify(res.data));
                 } catch (err) {
                     console.error("Auth verification failed:", err);
                     logout();
@@ -34,18 +53,9 @@ export const AuthProvider = ({ children }) => {
     const login = (newToken, userData) => {
         setToken(newToken);
         setUser(userData);
-        sessionStorage.setItem("token", newToken);
-        sessionStorage.setItem("user", JSON.stringify(userData));
-        sessionStorage.setItem("userId", userData.id || userData._id);
-    };
-
-    const logout = () => {
-        setToken(null);
-        setUser(null);
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("user");
-        sessionStorage.removeItem("userId");
-        window.location.href = "/";
+        setStoredItem("token", newToken);
+        setStoredItem("user", JSON.stringify(userData));
+        setStoredItem("userId", userData.id || userData._id);
     };
 
     return (
@@ -55,4 +65,5 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

@@ -22,6 +22,12 @@ const allowedOrigins = [
   "http://localhost:5173"
 ];
 
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  const normalizedOrigin = origin.replace(/\/$/, "");
+  return allowedOrigins.includes(normalizedOrigin);
+};
+
 
 const io = new Server(server, {
   cors: {
@@ -29,13 +35,11 @@ const io = new Server(server, {
       // allow requests with no origin (like mobile apps)
       if (!origin) return callback(null, true);
       
-      const isAllowed = allowedOrigins.includes(origin.replace(/\/$/, ""));
-      if (isAllowed || process.env.NODE_ENV !== "production") {
+      const isAllowed = isOriginAllowed(origin);
+      if (isAllowed) {
         callback(null, true);
       } else {
-        // Fallback to true but log origin for debug
-        console.log("Socket connection from origin:", origin);
-        callback(null, true); 
+        callback(new Error("Socket origin not allowed by CORS"));
       }
     },
     methods: ["GET", "POST"],
@@ -59,7 +63,12 @@ const io = new Server(server, {
 // }));
 
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Origin not allowed by CORS"));
+  },
   credentials: true
 }));
 
@@ -145,7 +154,11 @@ io.on("connection", (socket) => {
         });
       }
     } catch (err) {
-      // Error ignored
+      console.error("Socket send_message error:", err.message);
+      socket.emit("message_error", {
+        message: "Failed to send message",
+        requestId: data?.bloodRequest,
+      });
     }
   });
 

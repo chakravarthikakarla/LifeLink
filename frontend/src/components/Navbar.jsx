@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import axios from "../services/api";
@@ -15,41 +15,47 @@ const Navbar = () => {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const fetchUnreadCounts = async () => {
-    if (!isLoggedIn) return;
-    try {
-      const [resAlerts, resMessages] = await Promise.all([
-        axios.get("/blood/unread-count"),
-        axios.get("/chat/unread-count")
-      ]);
-      setUnreadAlerts(resAlerts.data.count);
-      setUnreadMessages(resMessages.data.count);
-    } catch (err) {
-      // log removed
-    }
-  };
-
   useEffect(() => {
-    fetchUnreadCounts();
-
-    if (isLoggedIn) {
-      const userId = user?.id || user?._id;
-
-      if (!socket.connected) socket.connect();
-
-      socket.emit("join_notifications", userId);
-
-      const handleNotification = (data) => {
-        fetchUnreadCounts();
-      };
-
-      socket.on("notification_update", handleNotification);
-
-      return () => {
-        socket.off("notification_update", handleNotification);
-      };
+    if (!isLoggedIn) {
+      return;
     }
-  }, [isLoggedIn]);
+
+    let isMounted = true;
+    const userId = user?.id || user?._id;
+
+    const fetchUnreadCounts = async () => {
+      try {
+        const [resAlerts, resMessages] = await Promise.all([
+          axios.get("/blood/unread-count"),
+          axios.get("/chat/unread-count"),
+        ]);
+        if (!isMounted) return;
+        setUnreadAlerts(resAlerts.data.count);
+        setUnreadMessages(resMessages.data.count);
+      } catch (err) {
+        console.error("Failed to fetch unread counts", err);
+      }
+    };
+
+    const initialFetchTimer = setTimeout(() => {
+      fetchUnreadCounts();
+    }, 0);
+
+    if (!socket.connected) socket.connect();
+    socket.emit("join_notifications", userId);
+
+    const handleNotification = () => {
+      fetchUnreadCounts();
+    };
+
+    socket.on("notification_update", handleNotification);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(initialFetchTimer);
+      socket.off("notification_update", handleNotification);
+    };
+  }, [isLoggedIn, user?.id, user?._id]);
 
   const handleAuthAction = () => {
     if (isLoggedIn) {

@@ -20,7 +20,8 @@ const ProtectedRoute = ({ children }) => {
         const res = await axios.get("/user/profile");
 
         // If profile incomplete and not on the details page, block access
-        if (!res.data.profileCompleted && location.pathname !== "/details") {
+        // Allow /alerts even with incomplete profile so new users can view requests
+        if (!res.data.profileCompleted && location.pathname !== "/details" && location.pathname !== "/alerts") {
           setIsAuthorized("incomplete");
         } else {
           setIsAuthorized(true);
@@ -33,10 +34,10 @@ const ProtectedRoute = ({ children }) => {
     };
 
     verifyProfile();
-  }, [token, location.pathname]);
+  }, [token, location.pathname, logout]);
 
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Show a skeleton state while verifying to prevent flash of protected content
@@ -58,7 +59,7 @@ const ProtectedRoute = ({ children }) => {
 
   // Redirect to login if token validation failed
   if (isAuthorized === false) {
-    return <Navigate to="/login" replace />;
+     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return children;

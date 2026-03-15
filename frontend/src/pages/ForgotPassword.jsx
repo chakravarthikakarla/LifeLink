@@ -25,8 +25,6 @@ const ForgotPassword = () => {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // ... (keeping other handlers the same for brevity initially, but modifying handleResetPassword)
-
   // Step 1: Request OTP
   const handleRequestOtp = async (e) => {
     e.preventDefault();

@@ -108,12 +108,15 @@ exports.register = async (req, res) => {
 
     const otpSent = await sendEmail(
       email,
-      "LifeLink - Verify Your Email",
+      "LifeLink - Email Verification OTP",
       `
-      <h2>LifeLink Email Verification</h2>
-      <p>Your OTP is:</p>
-      <h1>${otp}</h1>
-      <p>This OTP is valid for 10 minutes.</p>
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:20px;border:1px solid #eee;border-radius:8px;">
+          <h2 style="color:#d9534f;">Email Verification OTP</h2>
+          <p>Your OTP for email verification is:</p>
+          <h1 style="letter-spacing:8px;color:#d9534f;text-align:center;">${otp}</h1>
+          <p style="color:#888;">Valid for <strong>10 minutes</strong>. Do not share with anyone.</p>
+          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
+        </div>
       `
     );
 
@@ -289,8 +292,16 @@ exports.resendOtp = async (req, res) => {
 
     const resendSent = await sendEmail(
       user.email,
-      "LifeLink - Resend OTP",
-      `<h2>Your OTP is: ${otp}</h2>`
+      "LifeLink - Email Verification OTP",
+      `
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:20px;border:1px solid #eee;border-radius:8px;">
+          <h2 style="color:#d9534f;">Email Verification OTP</h2>
+          <p>Your OTP for email verification is:</p>
+          <h1 style="letter-spacing:8px;color:#d9534f;text-align:center;">${otp}</h1>
+          <p style="color:#888;">Valid for <strong>10 minutes</strong>. Do not share with anyone.</p>
+          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
+        </div>
+      `
     );
 
     if (!resendSent?.ok) {

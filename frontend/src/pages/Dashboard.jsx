@@ -38,7 +38,7 @@ const Dashboard = () => {
       try {
         const res = await axios.get("/user/profile");
         setUser(res.data);
-      } catch (error) {
+      } catch {
         sessionStorage.removeItem("token");
         navigate("/login");
       }

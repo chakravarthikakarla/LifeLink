@@ -2,8 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
 import Modal from "../components/Modal";
-import Skeleton from "../components/Skeleton";
 import socket from "../socket";
+
+const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
+
+const isVisibleAlert = (alert) => {
+  const request = alert?.bloodRequest;
+
+  if (!request) return false;
+  if (request.status !== "closed") return true;
+  if (!request.closedAt) return false;
+
+  return Date.now() - new Date(request.closedAt).getTime() < CLOSED_REQUEST_VISIBILITY_MS;
+};
 
 const Alerts = () => {
   const navigate = useNavigate();
@@ -15,17 +26,14 @@ const Alerts = () => {
     type: "confirm",
     onConfirm: () => { },
   });
-  const [loading, setLoading] = useState(true);
 
   // 🔔 Fetch alerts
   const fetchAlerts = async () => {
     try {
       const res = await axios.get("/alerts");
-      setAlerts(res.data);
-    } catch (error) {
-      // log removed
-    } finally {
-      setLoading(false);
+      setAlerts(res.data.filter(isVisibleAlert));
+    } catch (err) {
+      console.error("Failed to fetch alerts", err);
     }
   };
 
@@ -37,7 +45,12 @@ const Alerts = () => {
       socket.emit("join_notifications", myId);
     }
 
-    fetchAlerts();
+    const initialFetchTimer = setTimeout(() => {
+      fetchAlerts();
+    }, 0);
+    const refreshTimer = setInterval(() => {
+      fetchAlerts();
+    }, 60 * 1000);
 
     // Mark alerts as viewed (Navbar dot clearance)
     const markAsViewed = async () => {
@@ -58,6 +71,8 @@ const Alerts = () => {
     socket.on("notification_update", handleNotification);
 
     return () => {
+      clearTimeout(initialFetchTimer);
+      clearInterval(refreshTimer);
       socket.off("notification_update", handleNotification);
     };
   }, []);
@@ -73,12 +88,14 @@ const Alerts = () => {
           await axios.post("/alerts/accept", { alertId });
           fetchAlerts();
           setModalOpen(false);
-        } catch (error) {
+        } catch (err) {
+          console.error("Failed to accept alert", err);
           setModalConfig({
             title: "Error",
-            message: "Failed to accept the alert. Please try again.",
+            message: err.response?.data?.message || "Failed to accept the alert. Please try again.",
             type: "alert",
           });
+          setModalOpen(true);
         }
       },
     });
@@ -96,12 +113,14 @@ const Alerts = () => {
           await axios.post("/alerts/reject", { alertId });
           fetchAlerts();
           setModalOpen(false);
-        } catch (error) {
+        } catch (err) {
+          console.error("Failed to reject alert", err);
           setModalConfig({
             title: "Error",
-            message: "Failed to reject the alert. Please try again.",
+            message: err.response?.data?.message || "Failed to reject the alert. Please try again.",
             type: "alert",
           });
+          setModalOpen(true);
         }
       },
     });
@@ -115,7 +134,7 @@ const Alerts = () => {
       </h2>
 
       <div className="space-y-6">
-        {alerts.map((alert) => {
+        {alerts.filter(isVisibleAlert).map((alert) => {
           const request = alert.bloodRequest;
 
           // 🔑 Get logged-in user id from token payload (backend sends this)
@@ -251,19 +270,11 @@ const Alerts = () => {
                 ) : (
                   <>
                     <button
-                      disabled={alert.canAccept === false}
                       onClick={() => handleAccept(alert._id)}
-                      title={alert.canAccept === false ? alert.acceptDisabledReason || "Cannot accept right now" : ""}
-                      className={`px-6 py-2 rounded-lg transition font-semibold ${alert.canAccept === false ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-black text-white hover:opacity-90"}`}
+                      className="px-6 py-2 rounded-lg transition font-semibold bg-black text-white hover:opacity-90"
                     >
                       Accept
                     </button>
-
-                    {alert.canAccept === false && alert.acceptDisabledReason && (
-                      <p className="text-[11px] text-gray-500 max-w-[180px] text-right">
-                        {alert.acceptDisabledReason}
-                      </p>
-                    )}
 
                     <button
                       onClick={() => handleReject(alert._id)}

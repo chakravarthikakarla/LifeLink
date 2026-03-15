@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
 import axios from "../services/api";
 import socket from "../socket";

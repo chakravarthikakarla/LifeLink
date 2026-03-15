@@ -7,6 +7,7 @@ const sendEmail = require("../utils/sendEmail");
 
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 const ONE_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
+const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
 
 const isWithinDonationCooldown = (lastDonationDate) => {
   if (!lastDonationDate) return false;
@@ -198,7 +199,7 @@ const createBloodRequest = async (req, res) => {
 // Get current user's blood requests with accepted donor details and unread message counts
 const getMyRequests = async (req, res) => {
   try {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(Date.now() - CLOSED_REQUEST_VISIBILITY_MS);
 
     // Get all active requests and recently closed requests (within 24 hours)
     const requests = await BloodRequest.find({
@@ -261,7 +262,13 @@ const getMyRequests = async (req, res) => {
       })
     );
 
-    res.status(200).json(requestsWithDonors);
+    const visibleRequests = requestsWithDonors.filter((request) => {
+      if (request.status !== "closed") return true;
+      if (!request.closedAt) return false;
+      return Date.now() - new Date(request.closedAt).getTime() < CLOSED_REQUEST_VISIBILITY_MS;
+    });
+
+    res.status(200).json(visibleRequests);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -328,7 +335,7 @@ const markDonationDone = async (req, res) => {
     if (request.units <= 0) {
       request.status = "closed";
       request.closedAt = new Date();
-      alert.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      alert.expiresAt = new Date(Date.now() + CLOSED_REQUEST_VISIBILITY_MS);
       await alert.save();
     } else {
       const normalizedBloodGroup = String(request.bloodGroup).trim();
@@ -425,11 +432,11 @@ const closeBloodRequest = async (req, res) => {
     request.closedAt = new Date();
     await request.save();
 
-    // Also update the associated Alert's expiresAt to ensure it stays visible for 24h
+    // Also update the associated alert so it disappears 24h after closure.
     // We use the request._id to avoid any string/ObjectId mismatch
     await Alert.findOneAndUpdate(
       { bloodRequest: request._id },
-      { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
+      { $set: { expiresAt: new Date(Date.now() + CLOSED_REQUEST_VISIBILITY_MS) } }
     );
 
     // Notify all users via socket to refresh their alerts page
@@ -490,10 +497,6 @@ const getUnreadAlertCount = async (req, res) => {
 
     const unreadAlerts = recentAlerts.filter(alert => {
       if (!alert.bloodRequest) return false;
-
-      // Exclude under-18 users
-      const userAge = user.profile?.age;
-      if (!userAge || userAge < 18) return false;
 
       const requesterId = (alert.bloodRequest.requester?._id || alert.bloodRequest.requester)?.toString();
       const isRequester = requesterId === currentUserId;
