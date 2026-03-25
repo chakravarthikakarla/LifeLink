@@ -154,6 +154,18 @@ const Navbar = () => {
           {user?.role === "admin" && (
             <NavLink to="/admin-dashboard" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin</NavLink>
           )}
+          {isLoggedIn && (
+            <button
+              onClick={() => { setMobileMenu(false); navigate("/alerts"); }}
+              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 relative"
+            >
+              <Bell className="w-5 h-5 text-gray-700" />
+              <span>Alerts</span>
+              {(unreadAlerts > 0 || unreadMessages > 0) && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-600 border border-white rounded-full"></span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => { setMobileMenu(false); handleAuthAction(); }}
             className="mt-2 w-full text-left px-3 py-2 border border-[#6a0026] rounded-lg text-[#6a0026] font-medium"
