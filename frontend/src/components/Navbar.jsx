@@ -14,6 +14,7 @@ const Navbar = () => {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -101,8 +102,19 @@ const Navbar = () => {
         <NavLink to="/dashboard" className={navLinkClass}>Profile</NavLink>
       </ul>
 
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setMobileMenu(!mobileMenu)}
+        className="md:hidden p-2 rounded-md bg-gray-100 hover:bg-gray-200"
+        aria-label="Toggle mobile menu"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 6H20M4 12H20M4 18H20" stroke="#6a0026" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+
       {/* Right side */}
-      <div className="flex items-center gap-4">
+      <div className="hidden md:flex items-center gap-4">
 
         {isLoggedIn && (
           <div className="flex items-center gap-2">
@@ -131,6 +143,26 @@ const Navbar = () => {
       </div>
 
     </nav>
+
+    {mobileMenu && (
+      <div className="md:hidden fixed top-20 left-0 w-full bg-white border-t border-gray-200 shadow-lg z-40">
+        <div className="flex flex-col p-4 gap-2">
+          <NavLink to="/" onClick={() => setMobileMenu(false)} className={navLinkClass}>Home</NavLink>
+          <NavLink to="/about" onClick={() => setMobileMenu(false)} className={navLinkClass}>About Us</NavLink>
+          <NavLink to="/my-requests" onClick={() => setMobileMenu(false)} className={navLinkClass}>Request Blood</NavLink>
+          <NavLink to="/dashboard" onClick={() => setMobileMenu(false)} className={navLinkClass}>Profile</NavLink>
+          {user?.role === "admin" && (
+            <NavLink to="/admin-dashboard" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin</NavLink>
+          )}
+          <button
+            onClick={() => { setMobileMenu(false); handleAuthAction(); }}
+            className="mt-2 w-full text-left px-3 py-2 border border-[#6a0026] rounded-lg text-[#6a0026] font-medium"
+          >
+            {isLoggedIn ? "Logout" : "Log In"}
+          </button>
+        </div>
+      </div>
+    )}
 
       <Modal
         isOpen={modalOpen}
