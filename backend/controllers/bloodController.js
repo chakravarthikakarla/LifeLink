@@ -110,6 +110,14 @@ const createBloodRequest = async (req, res) => {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
+    // Date validation: Ensure requiredDate is not in the past
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const reqDate = new Date(requiredDate);
+    if (reqDate < today) {
+      return res.status(400).json({ message: "Required date cannot be in the past" });
+    }
+
     const bloodRequest = await BloodRequest.create({
       requester: req.user._id,
       patientName,

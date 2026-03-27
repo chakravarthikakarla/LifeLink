@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../services/api";
 import { toast } from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
 
 /* Tailwind input class */
 const inputClass =
@@ -9,6 +10,7 @@ const inputClass =
 
 const Details = () => {
   const navigate = useNavigate();
+  const { updateUser } = useAuth();
 
   // FORM STATE (NO UI CHANGE)
   const [form, setForm] = useState({
@@ -22,6 +24,8 @@ const Details = () => {
     gender: "",
     lastDonationDate: "",
     availableToDonate: "true",
+    club: "none",
+    clubRole: "member",
   });
 
   const [email, setEmail] = useState("");
@@ -90,8 +94,12 @@ const Details = () => {
   // 🔐 Submit profile
   const handleSubmit = async () => {
     // Basic Validation
-    if (!form.name || !form.phone || !form.address || !form.pincode || !form.dob || !form.bloodGroup || !form.gender) {
+    if (!form.name || !form.phone || !form.address || !form.pincode || !form.dob || !form.bloodGroup || !form.gender || !form.club) {
       toast.error("Please fill out all required fields.");
+      return;
+    }
+    if (form.club !== "none" && !form.clubRole) {
+      toast.error("Please select a club role.");
       return;
     }
     if (form.phone.length !== 10 || !/^\d+$/.test(form.phone)) {
@@ -108,7 +116,11 @@ const Details = () => {
         ...form,
         availableToDonate: form.availableToDonate === "true",
       };
-      await axios.put("/user/profile", submitData);
+      const res = await axios.put("/user/profile", submitData);
+      
+      const updatedUser = res.data.user;
+      updateUser(updatedUser);
+
       toast.success("Profile updated successfully!");
       navigate("/");
     } catch (error) {
@@ -250,6 +262,33 @@ const Details = () => {
                 onChange={handleChange}
                 className={inputClass}
               />
+            </Field>
+            
+            <Field label="Club">
+              <select
+                name="club"
+                value={form.club}
+                onChange={handleChange}
+                className={inputClass}
+              >
+                <option value="none">None</option>
+                <option value="NSS">NSS</option>
+                <option value="NCC">NCC</option>
+                <option value="Redcross">Redcross</option>
+              </select>
+            </Field>
+
+            <Field label="Club Role">
+              <select
+                name="clubRole"
+                value={form.clubRole}
+                onChange={handleChange}
+                disabled={form.club === "none"}
+                className={`${inputClass} ${form.club === "none" ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
             </Field>
 
           </div>

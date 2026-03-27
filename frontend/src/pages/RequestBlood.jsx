@@ -182,6 +182,7 @@ const RequestBlood = () => {
               <input
                 name="requiredDate"
                 type="date"
+                min={new Date().toISOString().split("T")[0]}
                 value={form.requiredDate}
                 onChange={handleChange}
                 className={inputClass}

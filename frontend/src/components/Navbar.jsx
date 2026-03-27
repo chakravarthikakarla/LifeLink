@@ -99,7 +99,17 @@ const Navbar = () => {
         <NavLink to="/" className={navLinkClass}>Home</NavLink>
         <NavLink to="/about" className={navLinkClass}>About Us</NavLink>
         <NavLink to="/my-requests" className={navLinkClass}>Request Blood</NavLink>
-        <NavLink to="/dashboard" className={navLinkClass}>Profile</NavLink>
+        {isLoggedIn && <NavLink to="/achievements" className={navLinkClass}>Hall of Fame</NavLink>}
+        <NavLink 
+          to={
+            (user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") 
+            ? "/admin-dashboard/profile" 
+            : "/dashboard"
+          } 
+          className={navLinkClass}
+        >
+          Profile
+        </NavLink>
       </ul>
 
       {/* Mobile controls: Alerts Bell and Menu button */}
@@ -164,9 +174,20 @@ const Navbar = () => {
           <NavLink to="/" onClick={() => setMobileMenu(false)} className={navLinkClass}>Home</NavLink>
           <NavLink to="/about" onClick={() => setMobileMenu(false)} className={navLinkClass}>About Us</NavLink>
           <NavLink to="/my-requests" onClick={() => setMobileMenu(false)} className={navLinkClass}>Request Blood</NavLink>
-          <NavLink to="/dashboard" onClick={() => setMobileMenu(false)} className={navLinkClass}>Profile</NavLink>
-          {user?.role === "admin" && (
-            <NavLink to="/admin-dashboard" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin</NavLink>
+          {isLoggedIn && <NavLink to="/achievements" onClick={() => setMobileMenu(false)} className={navLinkClass}>Hall of Fame</NavLink>}
+          <NavLink 
+            to={
+              (user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") 
+              ? "/admin-dashboard/profile" 
+              : "/dashboard"
+            } 
+            onClick={() => setMobileMenu(false)} 
+            className={navLinkClass}
+          >
+            Profile
+          </NavLink>
+          {(user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") && (
+            <NavLink to="/admin-dashboard/profile" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin</NavLink>
           )}
 
           <button

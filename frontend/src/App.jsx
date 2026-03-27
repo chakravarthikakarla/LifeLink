@@ -15,6 +15,11 @@ import Details from "./pages/Details";
 import Alerts from "./pages/Alerts";
 import MyRequests from "./pages/MyRequests";
 import Chat from "./pages/Chat";
+import AdminDashboard from "./pages/AdminDashboard";
+import ClubMembers from "./pages/ClubMembers";
+import MemberProfile from "./pages/MemberProfile";
+import ClubDonations from "./pages/ClubDonations";
+import Achievements from "./pages/Achievements";
 
 function App() {
   return (
@@ -25,14 +30,30 @@ function App() {
       <Route path="/about" element={<MainLayout><About /></MainLayout>} />
 
       {/* 🔐 PROTECTED ROUTES */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <MainLayout><Dashboard /></MainLayout>
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <MainLayout><Dashboard /></MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin-dashboard"
+          element={
+            <ProtectedRoute>
+              <MainLayout><AdminDashboard /></MainLayout>
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="profile" element={<Dashboard />} />
+          <Route path="members" element={<ClubMembers />} />
+          <Route path="member/:id" element={<MemberProfile />} />
+          <Route path="donations" element={<ClubDonations />} />
+          <Route path="achievements" element={<div className="p-6"><h1 className="text-3xl font-bold">Achievements</h1></div>} />
+        </Route>
 
       <Route
         path="/request-blood"
@@ -66,6 +87,15 @@ function App() {
         element={
           <ProtectedRoute>
             <MainLayout><Alerts /></MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/achievements"
+        element={
+          <ProtectedRoute>
+            <MainLayout><Achievements /></MainLayout>
           </ProtectedRoute>
         }
       />

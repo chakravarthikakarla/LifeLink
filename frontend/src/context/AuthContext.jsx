@@ -58,8 +58,13 @@ export const AuthProvider = ({ children }) => {
         setStoredItem("userId", userData.id || userData._id);
     };
 
+    const updateUser = (userData) => {
+        setUser(userData);
+        setStoredItem("user", JSON.stringify(userData));
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, logout, setUser }}>
+        <AuthContext.Provider value={{ user, token, loading, login, logout, setUser, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

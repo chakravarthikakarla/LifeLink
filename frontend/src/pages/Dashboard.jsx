@@ -4,6 +4,7 @@ import Skeleton from "../components/Skeleton";
 import axios from "../services/api";
 import { toast } from "react-hot-toast";
 import Modal from "../components/Modal";
+import { getAvatarColor } from "../utils/getAvatarColor";
 
 const AboutRow = ({ label, value }) => (
   <div className="flex justify-between py-2">
@@ -25,6 +26,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     title: "",
@@ -38,6 +40,7 @@ const Dashboard = () => {
       try {
         const res = await axios.get("/user/profile");
         setUser(res.data);
+        setImgError(false);
       } catch {
         sessionStorage.removeItem("token");
         navigate("/login");
@@ -67,7 +70,7 @@ const Dashboard = () => {
   const profile = user.profile || {};
 
   return (
-    <div className="bg-gray-50 min-h-[calc(100vh-96px)] px-6 md:px-14 pt-6 pb-8">
+    <div className="bg-gray-50 min-h-[calc(100vh-96px)] px-6 md:px-8 pt-2 pb-8">
 
       {/* MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -79,19 +82,21 @@ const Dashboard = () => {
           <div className="bg-white rounded-xl shadow-sm p-5 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="relative group">
-                {profile.photo ? (
+                {profile.photo && !imgError ? (
                   <img
                     src={profile.photo}
                     alt="Profile"
                     className="w-16 h-16 rounded-lg object-cover border border-gray-200 cursor-pointer"
                     onClick={() => setShowImageModal(true)}
+                    onError={() => setImgError(true)}
                   />
                 ) : (
                   <div
-                    className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center text-xl font-semibold cursor-pointer"
+                    className="w-16 h-16 rounded-lg flex items-center justify-center text-xl font-semibold cursor-pointer text-white"
+                    style={{ backgroundColor: getAvatarColor(profile.name) }}
                     onClick={() => setShowImageModal(true)}
                   >
-                    {profile.name ? profile.name[0] : "U"}
+                    {profile.name ? profile.name[0].toUpperCase() : "U"}
                   </div>
                 )}
                 <div
@@ -251,6 +256,8 @@ const Dashboard = () => {
                 label="Available to Donate"
                 value={profile.availableToDonate !== false ? "Yes" : "No"}
               />
+              <AboutRow label="Club" value={profile.club} />
+              <AboutRow label="Club Role" value={profile.clubRole} />
             </div>
           </div>
 

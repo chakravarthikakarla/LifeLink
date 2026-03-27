@@ -84,6 +84,7 @@ app.use("/api/user", require("./routes/userRoutes"));
 app.use("/api/blood", require("./routes/bloodRoutes"));
 app.use("/api/alerts", require("./routes/alertRoutes"));
 app.use("/api/chat", require("./routes/chatRoutes"));
+app.use("/api/achievements", require("./routes/achievementRoutes"));
 
 
 

@@ -54,6 +54,16 @@ const userSchema = new mongoose.Schema(
         type: Date,
         default: Date.now,
       },
+      club: {
+        type: String,
+        enum: ["NSS", "NCC", "Redcross", "none"],
+        default: "none",
+      },
+      clubRole: {
+        type: String,
+        enum: ["admin", "member"],
+        default: "member",
+      },
     },
 
     donationHistory: [
