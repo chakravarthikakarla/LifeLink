@@ -157,7 +157,9 @@ const Achievements = () => {
                 <p className="text-gray-500">How the community is performing this month</p>
               </div>
               <div className="flex gap-2">
-                 <span className="bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">Growing +12%</span>
+                 <span className="bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
+                   {stats?.global?.totalDonors > 5 ? "Community Growing 📈" : "New Community 🌱"}
+                 </span>
               </div>
            </div>
 
@@ -168,11 +170,11 @@ const Achievements = () => {
               </div>
               <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                   <p className="text-xs text-gray-500 font-bold uppercase mb-1">Top Blood Group</p>
-                  <p className="text-xl font-bold">O Positive (34%)</p>
+                  <p className="text-xl font-bold">{stats?.global?.topBloodGroup || "O+ (0%)"}</p>
               </div>
               <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                   <p className="text-xs text-gray-500 font-bold uppercase mb-1">Urgent Responses</p>
-                  <p className="text-xl font-bold">24 Successful</p>
+                  <p className="text-xl font-bold">{stats?.global?.urgentResponses || "0 Successful"}</p>
               </div>
            </div>
         </div>

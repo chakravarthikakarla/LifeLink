@@ -4,16 +4,12 @@ const Alert = require("../models/Alert");
 const User = require("../models/User");
 const Message = require("../models/Message");
 const sendEmail = require("../utils/sendEmail");
+const { NINETY_DAYS_MS, ONE_TWENTY_DAYS_MS, isWithinCooldown } = require("../utils/cooldown");
 
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-const ONE_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000;
 const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
 
-const isWithinDonationCooldown = (lastDonationDate) => {
-  if (!lastDonationDate) return false;
-  const last = new Date(lastDonationDate).getTime();
-  if (Number.isNaN(last)) return false;
-  return Date.now() - last < NINETY_DAYS_MS;
+const isWithinDonationCooldown = (lastDonationDate, gender = "Male") => {
+  return isWithinCooldown(lastDonationDate, gender);
 };
 
 const sendBloodRequestEmails = async ({ donors, bloodRequest, bloodGroup, patientName, units, requestAddress, phone, urgency, requiredDate }) => {
@@ -123,6 +119,7 @@ const createBloodRequest = async (req, res) => {
       patientName,
       bloodGroup,
       units,
+      totalUnits: units,
       urgency: urgency || "Normal",
       requestAddress,
       phone,
@@ -230,9 +227,12 @@ const getMyRequests = async (req, res) => {
           });
 
           const reqObj = request.toObject();
-
-          // Count unread messages for each donor
+          
+          // Calculate total units for progress display (for existing and new requests)
           const donorsData = alert ? alert.acceptedDonors : [];
+          const totalDonated = donorsData.reduce((sum, d) => sum + (d.donatedUnits || 0), 0);
+          reqObj.totalUnits = request.totalUnits || (request.units + totalDonated);
+
           reqObj.acceptedDonors = await Promise.all(
             donorsData
               .filter((d) => d.user) // skip entries with missing user reference
@@ -329,6 +329,7 @@ const markDonationDone = async (req, res) => {
 
     donor.profile = donor.profile || {};
     donor.profile.lastDonationDate = new Date();
+    donor.profile.availableToDonate = false; // 🛑 Set to unavailable after donation
     donor.donationHistory.push({
       date: new Date(),
       units: String(numericUnits),
@@ -437,6 +438,7 @@ const closeBloodRequest = async (req, res) => {
     }
 
     request.status = "closed";
+    request.units = 0; // 🛑 Clear remaining units on manual closure
     request.closedAt = new Date();
     await request.save();
 

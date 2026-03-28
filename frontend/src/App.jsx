@@ -52,7 +52,6 @@ function App() {
           <Route path="members" element={<ClubMembers />} />
           <Route path="member/:id" element={<MemberProfile />} />
           <Route path="donations" element={<ClubDonations />} />
-          <Route path="achievements" element={<div className="p-6"><h1 className="text-3xl font-bold">Achievements</h1></div>} />
         </Route>
 
       <Route

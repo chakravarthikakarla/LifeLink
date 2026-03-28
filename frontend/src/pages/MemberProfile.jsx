@@ -26,6 +26,7 @@ const MemberProfile = () => {
         const fetchMemberProfile = async () => {
             try {
                 const res = await axios.get(`/user/member-profile/${id}`);
+                console.log("[DEBUG] Member Profile Data:", res.data);
                 setMember(res.data);
             } catch (error) {
                 toast.error(error.response?.data?.message || "Failed to fetch member profile");

@@ -4,6 +4,7 @@ const BloodRequest = require("../models/BloodRequest");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const sendEmail = require("../utils/sendEmail");
+const { isWithinCooldown, getCooldownEndDate } = require("../utils/cooldown");
 
 const CLOSED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +78,12 @@ const getAlerts = async (req, res) => {
         const obj = alert.toObject();
         obj._myId = req.user._id.toString();
 
+        // Calculate total units (for progress display)
+        const totalDonated = obj.acceptedDonors?.reduce((sum, d) => sum + (d.donatedUnits || 0), 0) || 0;
+        if (obj.bloodRequest) {
+          obj.bloodRequest.totalUnits = obj.bloodRequest.totalUnits || (obj.bloodRequest.units + totalDonated);
+        }
+
         // If user has accepted, check for unread messages from the requester
         const accepted = alert.acceptedDonors.some(
           (d) => d.user.toString() === obj._myId
@@ -139,6 +146,22 @@ const acceptAlert = async (req, res) => {
     );
     if (alreadyRejected) {
       return res.status(400).json({ message: "You have already rejected this request" });
+    }
+    
+    // 🩸 Check for Donation Cooldown
+    const lastDonationDate = req.user.profile?.lastDonationDate;
+    const gender = req.user.profile?.gender || "Male";
+    
+    if (lastDonationDate && isWithinCooldown(lastDonationDate, gender)) {
+      const cooldownEnd = getCooldownEndDate(lastDonationDate, gender);
+      const formattedDate = cooldownEnd.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      return res.status(400).json({ 
+        message: `You are under cooldown up to ${formattedDate}` 
+      });
     }
 
     const requesterId = getRequesterId(alert.bloodRequest);

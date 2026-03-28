@@ -19,6 +19,10 @@ const bloodRequestSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    totalUnits: {
+      type: Number,
+      required: false, // Optional for backward compatibility; handled dynamically in controllers
+    },
     urgency: {
       type: String,
       enum: ["Normal", "Urgent", "Emergency"],

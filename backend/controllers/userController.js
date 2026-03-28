@@ -1,8 +1,16 @@
 const User = require("../models/User");
+const { isWithinCooldown } = require("../utils/cooldown");
 
 const getUserProfile = async (req, res) => {
   try {
-    res.status(200).json(req.user);
+    const userObj = req.user.toObject();
+    const lastDonation = userObj.profile?.lastDonationDate;
+    const gender = userObj.profile?.gender;
+
+    if (lastDonation && isWithinCooldown(lastDonation, gender)) {
+      userObj.profile.availableToDonate = false;
+    }
+    res.status(200).json(userObj);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -102,9 +110,19 @@ const getClubMembers = async (req, res) => {
       _id: { $ne: req.user._id }
     }).select("profile email");
 
-    console.log("Found members count:", members.length);
+    const membersWithAvailability = members.map(m => {
+      const memberObj = m.toObject();
+      const lastDonation = memberObj.profile?.lastDonationDate;
+      const gender = memberObj.profile?.gender;
+      
+      // Override availability if in cooldown
+      if (lastDonation && isWithinCooldown(lastDonation, gender)) {
+        memberObj.profile.availableToDonate = false;
+      }
+      return memberObj;
+    });
 
-    res.status(200).json(members);
+    res.status(200).json(membersWithAvailability);
   } catch (error) {
     console.error("getClubMembers error:", error);
     res.status(500).json({ message: error.message });
@@ -114,18 +132,27 @@ const getClubMembers = async (req, res) => {
 const getMemberProfile = async (req, res) => {
   try {
     const memberId = req.params.id;
-    const member = await User.findById(memberId).select("-password");
+    const member = await User.findById(memberId).select("-password").lean();
 
     if (!member) {
       return res.status(404).json({ message: "Member not found" });
     }
 
-    // Security check: only allow if in same club or if requester is admin of that club
+    // Security check
     const requesterClub = req.user.profile?.club;
-    const isSameClub = member.profile?.club === requesterClub;
+    if (member.profile?.club !== requesterClub) {
+      return res.status(403).json({ message: "Access denied." });
+    }
 
-    if (!isSameClub) {
-      return res.status(403).json({ message: "Access denied. Member belongs to a different club." });
+    const lastDonation = member.profile?.lastDonationDate;
+    const gender = member.profile?.gender;
+    const inCooldown = lastDonation && isWithinCooldown(lastDonation, gender);
+
+    console.log(`[DEBUG] Member Profile: ${member.email}, lastDonation=${lastDonation}, inCooldown=${inCooldown}`);
+
+    // If they are in cooldown, force availability to false
+    if (inCooldown) {
+      member.profile.availableToDonate = false;
     }
 
     res.status(200).json(member);

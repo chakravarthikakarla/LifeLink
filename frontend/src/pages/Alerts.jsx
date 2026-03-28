@@ -183,7 +183,7 @@ const Alerts = () => {
                   </p>
                   <p>
                     <span className="font-medium">Units:</span>{" "}
-                    {request?.units ?? "-"}
+                    {request?.units ?? "-"} / {request?.totalUnits || request?.units || "-"}
                   </p>
                   <p>
                     <span className="font-medium">Required By:</span>{" "}

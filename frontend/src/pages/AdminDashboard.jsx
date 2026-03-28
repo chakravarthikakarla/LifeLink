@@ -13,7 +13,6 @@ const AdminDashboard = () => {
         { name: "Profile", path: "/admin-dashboard/profile", icon: User },
         { name: "Club Members", path: "/admin-dashboard/members", icon: Users },
         { name: "Donation Records", path: "/admin-dashboard/donations", icon: ClipboardList },
-        { name: "Achievements", path: "/admin-dashboard/achievements", icon: Trophy },
     ];
 
     const [imgError, setImgError] = useState(false);

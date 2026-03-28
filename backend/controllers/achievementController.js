@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const BloodRequest = require("../models/BloodRequest");
 
 // @desc    Get Club Leaderboard
 // @route   GET /api/achievements/leaderboard
@@ -71,10 +72,36 @@ const getUserAchievements = async (req, res) => {
     // 3. Global Stats (for the Pulse section)
     const allUsers = await User.find({});
     let globalUnits = 0;
+    const bloodGroupCounts = {};
+
     allUsers.forEach(u => {
+      // Track total units
       u.donationHistory?.forEach(d => {
         globalUnits += parseFloat(d.units) || 1;
       });
+
+      // Track blood group frequency
+      const bg = u.profile?.bloodGroup;
+      if (bg) {
+        bloodGroupCounts[bg] = (bloodGroupCounts[bg] || 0) + 1;
+      }
+    });
+
+    // Determine Top Blood Group
+    let topBG = "O+";
+    let topBGCount = 0;
+    Object.entries(bloodGroupCounts).forEach(([bg, count]) => {
+      if (count > topBGCount) {
+        topBGCount = count;
+        topBG = bg;
+      }
+    });
+    const topBGPercent = allUsers.length > 0 ? Math.round((topBGCount / allUsers.length) * 100) : 0;
+
+    // 4. Calculate Urgent Responses (Emergency/Urgent requests that are closed)
+    const urgentRequestsFulfilled = await BloodRequest.countDocuments({
+      urgency: { $in: ["Emergency", "Urgent"] },
+      status: "closed"
     });
 
     res.status(200).json({
@@ -88,7 +115,9 @@ const getUserAchievements = async (req, res) => {
       global: {
         totalUnits: globalUnits,
         totalLivesSaved: Math.round(globalUnits * 3),
-        totalDonors: allUsers.length
+        totalDonors: allUsers.length,
+        topBloodGroup: `${topBG} (${topBGPercent}%)`,
+        urgentResponses: `${urgentRequestsFulfilled} Successful`
       }
     });
   } catch (err) {

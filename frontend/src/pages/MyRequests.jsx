@@ -247,7 +247,9 @@ const MyRequests = () => {
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Units Required</span>
-                                    <p className="font-medium">{request.units ?? "-"}</p>
+                                    <p className="font-medium">
+                                        {request.units ?? "-"} / {request.totalUnits || request.units || "-"}
+                                    </p>
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Required By</span>
