@@ -64,6 +64,10 @@ const userSchema = new mongoose.Schema(
         enum: ["admin", "member"],
         default: "member",
       },
+      isAdminApproved: {
+        type: Boolean,
+        default: false,
+      },
     },
 
     donationHistory: [

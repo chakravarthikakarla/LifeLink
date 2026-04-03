@@ -20,6 +20,7 @@ import ClubMembers from "./pages/ClubMembers";
 import MemberProfile from "./pages/MemberProfile";
 import ClubDonations from "./pages/ClubDonations";
 import Achievements from "./pages/Achievements";
+import MasterAdminDashboard from "./pages/MasterAdminDashboard";
 
 function App() {
   return (
@@ -95,6 +96,15 @@ function App() {
         element={
           <ProtectedRoute>
             <MainLayout><Achievements /></MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
+        path="/master-admin"
+        element={
+          <ProtectedRoute>
+            <MainLayout><MasterAdminDashboard /></MainLayout>
           </ProtectedRoute>
         }
       />

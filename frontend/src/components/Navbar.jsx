@@ -102,7 +102,7 @@ const Navbar = () => {
         {isLoggedIn && <NavLink to="/achievements" className={navLinkClass}>Hall of Fame</NavLink>}
         <NavLink 
           to={
-            (user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") 
+            ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
             ? "/admin-dashboard/profile" 
             : "/dashboard"
           } 
@@ -110,6 +110,9 @@ const Navbar = () => {
         >
           Profile
         </NavLink>
+        {user?.email === "admin@lifelink.com" && (
+          <NavLink to="/master-admin" className={navLinkClass}>Admin Panel</NavLink>
+        )}
       </ul>
 
       {/* Mobile controls: Alerts Bell and Menu button */}
@@ -177,7 +180,7 @@ const Navbar = () => {
           {isLoggedIn && <NavLink to="/achievements" onClick={() => setMobileMenu(false)} className={navLinkClass}>Hall of Fame</NavLink>}
           <NavLink 
             to={
-              (user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") 
+              ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
               ? "/admin-dashboard/profile" 
               : "/dashboard"
             } 
@@ -186,7 +189,10 @@ const Navbar = () => {
           >
             Profile
           </NavLink>
-          {(user?.profile?.clubRole?.toLowerCase() === "admin" || user?.role === "admin") && (
+          {user?.email === "admin@lifelink.com" && (
+            <NavLink to="/master-admin" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin Panel</NavLink>
+          )}
+          {((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") && (
             <NavLink to="/admin-dashboard/profile" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin</NavLink>
           )}
 

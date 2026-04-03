@@ -39,6 +39,17 @@ const updateUserProfile = async (req, res) => {
     user.profile.address = req.body.address ?? user.profile.address;
     user.profile.pincode = req.body.pincode ?? user.profile.pincode;
     user.profile.club = req.body.club ?? user.profile.club;
+    
+    // admin approval logic
+    if (req.body.clubRole === "admin" && user.profile.clubRole !== "admin") {
+      // If user is requesting to become an admin, set approval to false
+      // Unless they are the master admin
+      if (user.email !== "admin@lifelink.com") {
+        user.profile.isAdminApproved = false;
+      } else {
+        user.profile.isAdminApproved = true;
+      }
+    }
     user.profile.clubRole = req.body.clubRole ?? user.profile.clubRole;
 
     if (req.body.availableToDonate !== undefined) {
@@ -98,11 +109,16 @@ const updateUserProfile = async (req, res) => {
 const getClubMembers = async (req, res) => {
   try {
     const adminClub = req.user.profile?.club;
+    const profile = req.user.profile;
     console.log("Admin Club:", adminClub);
     console.log("Admin ID:", req.user._id);
 
     if (!adminClub || adminClub === "none") {
       return res.status(400).json({ message: "No club associated with this account" });
+    }
+
+    if (profile?.clubRole !== "admin" || !profile?.isAdminApproved) {
+      return res.status(403).json({ message: "Only approved club admins can view members." });
     }
 
     const members = await User.find({
@@ -164,10 +180,11 @@ const getMemberProfile = async (req, res) => {
 const removeMember = async (req, res) => {
   try {
     const memberId = req.params.id;
-    const adminClub = req.user.profile?.club;
+    const adminProfile = req.user.profile;
+    const adminClub = adminProfile?.club;
 
-    if (!adminClub || adminClub === "none") {
-      return res.status(403).json({ message: "Only club admins can remove members." });
+    if (!adminClub || adminClub === "none" || adminProfile?.clubRole !== "admin" || !adminProfile?.isAdminApproved) {
+      return res.status(403).json({ message: "Only approved club admins can remove members." });
     }
 
     const member = await User.findById(memberId);
@@ -208,10 +225,11 @@ const removeMember = async (req, res) => {
 
 const getClubDonations = async (req, res) => {
   try {
-    const adminClub = req.user.profile?.club;
+    const profile = req.user.profile;
+    const adminClub = profile?.club;
 
-    if (!adminClub || adminClub === "none") {
-      return res.status(403).json({ message: "Only club admins can view donation records." });
+    if (!adminClub || adminClub === "none" || profile?.clubRole !== "admin" || !profile?.isAdminApproved) {
+      return res.status(403).json({ message: "Only approved club admins can view donation records." });
     }
 
     // Find all users in the same club

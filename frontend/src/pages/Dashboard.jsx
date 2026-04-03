@@ -257,7 +257,7 @@ const Dashboard = () => {
                 value={profile.availableToDonate !== false ? "Yes" : "No"}
               />
               <AboutRow label="Club" value={profile.club} />
-              <AboutRow label="Club Role" value={profile.clubRole} />
+              <AboutRow label="Club Role" value={profile.clubRole === 'admin' && !profile.isAdminApproved ? 'Member (Admin Pending)' : profile.clubRole} />
             </div>
           </div>
 

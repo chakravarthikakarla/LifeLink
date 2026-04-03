@@ -19,7 +19,8 @@ const frontendURL = (process.env.FRONTEND_URL || "http://localhost:5173").replac
 const allowedOrigins = [
   frontendURL,
   "https://lifelink-connect.vercel.app", // Explicitly add production URL
-  "http://localhost:5173"
+  "http://localhost:5173",
+  "http://localhost:5174"
 ];
 
 const isOriginAllowed = (origin) => {
@@ -85,6 +86,7 @@ app.use("/api/blood", require("./routes/bloodRoutes"));
 app.use("/api/alerts", require("./routes/alertRoutes"));
 app.use("/api/chat", require("./routes/chatRoutes"));
 app.use("/api/achievements", require("./routes/achievementRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
 
 
 

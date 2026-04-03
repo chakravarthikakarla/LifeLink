@@ -45,4 +45,7 @@ const alertSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
+// TTL index to automatically delete alerts when expiresAt passes
+alertSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 module.exports = mongoose.model("Alert", alertSchema);

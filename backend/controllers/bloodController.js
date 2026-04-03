@@ -215,60 +215,70 @@ const getMyRequests = async (req, res) => {
       ],
     }).sort({ createdAt: -1 });
 
-    // For each request, find the alert and get accepted donors
-    const requestsWithDonors = await Promise.all(
-      requests.map(async (request) => {
-        try {
-          const alert = await Alert.findOne({
-            bloodRequest: request._id,
-          }).populate({
-            path: "acceptedDonors.user",
-            select: "email profile.name profile.phone profile.bloodGroup profile.gender",
-          });
+    // Batch fetch alerts for all requests
+    const requestIds = requests.map((r) => r._id);
+    const alerts = await Alert.find({ bloodRequest: { $in: requestIds } }).populate({
+      path: "acceptedDonors.user",
+      select: "email profile.name profile.phone profile.bloodGroup profile.gender",
+    });
+    const alertsMap = new Map(alerts.map((a) => [a.bloodRequest.toString(), a]));
 
-          const reqObj = request.toObject();
-          
-          // Calculate total units for progress display (for existing and new requests)
-          const donorsData = alert ? alert.acceptedDonors : [];
-          const totalDonated = donorsData.reduce((sum, d) => sum + (d.donatedUnits || 0), 0);
-          reqObj.totalUnits = request.totalUnits || (request.units + totalDonated);
+    // Batch fetch unread message counts using aggregation
+    const unreadCounts = await Message.aggregate([
+      {
+        $match: {
+          bloodRequest: { $in: requestIds },
+          receiver: new mongoose.Types.ObjectId(req.user._id),
+          isRead: false,
+        },
+      },
+      {
+        $group: {
+          _id: {
+            bloodRequest: "$bloodRequest",
+            sender: "$sender",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
 
-          reqObj.acceptedDonors = await Promise.all(
-            donorsData
-              .filter((d) => d.user) // skip entries with missing user reference
-              .sort((a, b) => new Date(a.acceptedAt) - new Date(b.acceptedAt))
-              .map(async (d) => {
-                const unreadCount = await Message.countDocuments({
-                  bloodRequest: new mongoose.Types.ObjectId(request._id),
-                  sender: new mongoose.Types.ObjectId(d.user?._id),
-                  receiver: new mongoose.Types.ObjectId(req.user._id),
-                  isRead: false
-                });
+    const unreadMap = new Map();
+    unreadCounts.forEach((c) => {
+      unreadMap.set(`${c._id.bloodRequest.toString()}-${c._id.sender.toString()}`, c.count);
+    });
 
-                return {
-                  _id: d.user?._id,
-                  name: d.user?.profile?.name || "Unknown",
-                  email: d.user?.email || "",
-                  phone: d.user?.profile?.phone || "",
-                  bloodGroup: d.user?.profile?.bloodGroup || "",
-                  gender: d.user?.profile?.gender || "",
-                  acceptedAt: d.acceptedAt,
-                  donationDone: !!d.donationDone,
-                  donatedUnits: d.donatedUnits || 0,
-                  donationDate: d.donationDate || null,
-                  unreadCount
-                };
-              })
-          );
+    // Map synchronous data to requests
+    const requestsWithDonors = requests.map((request) => {
+      const alert = alertsMap.get(request._id.toString());
+      const reqObj = request.toObject();
 
-          return reqObj;
-        } catch (innerErr) {
-          const reqObj = request.toObject();
-          reqObj.acceptedDonors = [];
-          return reqObj;
-        }
-      })
-    );
+      const donorsData = alert ? alert.acceptedDonors : [];
+      const totalDonated = donorsData.reduce((sum, d) => sum + (d.donatedUnits || 0), 0);
+      reqObj.totalUnits = request.totalUnits || request.units + totalDonated;
+
+      reqObj.acceptedDonors = donorsData
+        .filter((d) => d.user)
+        .sort((a, b) => new Date(a.acceptedAt) - new Date(b.acceptedAt))
+        .map((d) => {
+          const unreadKey = `${request._id.toString()}-${d.user._id.toString()}`;
+          return {
+            _id: d.user._id,
+            name: d.user?.profile?.name || "Unknown",
+            email: d.user?.email || "",
+            phone: d.user?.profile?.phone || "",
+            bloodGroup: d.user?.profile?.bloodGroup || "",
+            gender: d.user?.profile?.gender || "",
+            acceptedAt: d.acceptedAt,
+            donationDone: !!d.donationDone,
+            donatedUnits: d.donatedUnits || 0,
+            donationDate: d.donationDate || null,
+            unreadCount: unreadMap.get(unreadKey) || 0,
+          };
+        });
+
+      return reqObj;
+    });
 
     const visibleRequests = requestsWithDonors.filter((request) => {
       if (request.status !== "closed") return true;
@@ -336,18 +346,27 @@ const markDonationDone = async (req, res) => {
     });
     await donor.save();
 
-    request.units = Math.max(0, Number(request.units || 0) - numericUnits);
+    const updatedRequest = await BloodRequest.findByIdAndUpdate(
+      requestId,
+      { $inc: { units: -numericUnits } },
+      { new: true }
+    );
+
+    if (updatedRequest.units < 0) {
+      updatedRequest.units = 0;
+      await updatedRequest.save();
+    }
 
     let renotifySent = 0;
     let renotifyFailed = 0;
 
-    if (request.units <= 0) {
-      request.status = "closed";
-      request.closedAt = new Date();
+    if (updatedRequest.units <= 0) {
+      updatedRequest.status = "closed";
+      updatedRequest.closedAt = new Date();
       alert.expiresAt = new Date(Date.now() + CLOSED_REQUEST_VISIBILITY_MS);
       await alert.save();
     } else {
-      const normalizedBloodGroup = String(request.bloodGroup).trim();
+      const normalizedBloodGroup = String(updatedRequest.bloodGroup).trim();
       const escapedBloodGroup = normalizedBloodGroup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const ninetyDaysAgo = new Date(Date.now() - NINETY_DAYS_MS);
       const oneHundredTwentyDaysAgo = new Date(Date.now() - ONE_TWENTY_DAYS_MS);
@@ -379,27 +398,27 @@ const markDonationDone = async (req, res) => {
 
       const emailStats = await sendBloodRequestEmails({
         donors: eligibleDonors,
-        bloodRequest: request,
-        bloodGroup: request.bloodGroup,
-        patientName: request.patientName,
-        units: request.units,
-        requestAddress: request.requestAddress,
-        phone: request.phone,
-        urgency: request.urgency,
-        requiredDate: request.requiredDate,
+        bloodRequest: updatedRequest,
+        bloodGroup: updatedRequest.bloodGroup,
+        patientName: updatedRequest.patientName,
+        units: updatedRequest.units,
+        requestAddress: updatedRequest.requestAddress,
+        phone: updatedRequest.phone,
+        urgency: updatedRequest.urgency,
+        requiredDate: updatedRequest.requiredDate,
       });
       renotifySent = emailStats.sentCount;
       renotifyFailed = emailStats.failedCount;
     }
 
-    await request.save();
+    await updatedRequest.save();
 
     const io = req.app.get("io");
     if (io) {
       io.emit("notification_update", { type: "alert" });
-      io.to(request.requester.toString()).emit("notification_update", {
+      io.to(updatedRequest.requester.toString()).emit("notification_update", {
         type: "request_updated",
-        receiver: request.requester.toString(),
+        receiver: updatedRequest.requester.toString(),
       });
       io.to(donorId.toString()).emit("notification_update", {
         type: "donation_marked",
@@ -408,11 +427,11 @@ const markDonationDone = async (req, res) => {
     }
 
     res.status(200).json({
-      message: request.units > 0
+      message: updatedRequest.units > 0
         ? "Donation marked. Remaining units updated and donors re-notified."
         : "Donation marked. Request fulfilled and closed.",
-      remainingUnits: request.units,
-      requestClosed: request.status === "closed",
+      remainingUnits: updatedRequest.units,
+      requestClosed: updatedRequest.status === "closed",
       renotifySent,
       renotifyFailed,
     });
