@@ -8,6 +8,8 @@ import { useAuth } from "../context/AuthContext";
 const inputClass =
   "w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-1 focus:ring-[#6a0026]";
 
+const MASTER_ADMIN_EMAIL = "debateverse80@gmail.com";
+
 const Details = () => {
   const navigate = useNavigate();
   const { updateUser } = useAuth();
@@ -94,11 +96,18 @@ const Details = () => {
   // 🔐 Submit profile
   const handleSubmit = async () => {
     // Basic Validation
-    if (!form.name || !form.phone || !form.address || !form.pincode || !form.dob || !form.bloodGroup || !form.gender || !form.club) {
+    const isMasterAdmin = email === MASTER_ADMIN_EMAIL;
+    const requiredFields = ["name", "phone", "address", "pincode", "dob", "bloodGroup", "gender"];
+    if (!isMasterAdmin) requiredFields.push("club");
+
+    const missingFields = requiredFields.filter(field => !form[field] || (field === "club" && form.club === ""));
+    
+    if (missingFields.length > 0) {
       toast.error("Please fill out all required fields.");
       return;
     }
-    if (form.club !== "none" && !form.clubRole) {
+
+    if (!isMasterAdmin && form.club !== "none" && !form.clubRole) {
       toast.error("Please select a club role.");
       return;
     }
@@ -112,9 +121,13 @@ const Details = () => {
     }
 
     try {
+      const isMasterAdmin = email === MASTER_ADMIN_EMAIL;
       const submitData = {
         ...form,
         availableToDonate: form.availableToDonate === "true",
+        // Ensure master admin stays master admin even if fields are hidden
+        club: isMasterAdmin ? "none" : form.club,
+        clubRole: isMasterAdmin ? "admin" : form.clubRole,
       };
       const res = await axios.put("/user/profile", submitData);
       
@@ -264,32 +277,36 @@ const Details = () => {
               />
             </Field>
             
-            <Field label="Club">
-              <select
-                name="club"
-                value={form.club}
-                onChange={handleChange}
-                className={inputClass}
-              >
-                <option value="none">None</option>
-                <option value="NSS">NSS</option>
-                <option value="NCC">NCC</option>
-                <option value="Redcross">Redcross</option>
-              </select>
-            </Field>
+            {email !== MASTER_ADMIN_EMAIL && (
+              <>
+                <Field label="Club">
+                  <select
+                    name="club"
+                    value={form.club}
+                    onChange={handleChange}
+                    className={inputClass}
+                  >
+                    <option value="none">None</option>
+                    <option value="NSS">NSS</option>
+                    <option value="NCC">NCC</option>
+                    <option value="Redcross">Redcross</option>
+                  </select>
+                </Field>
 
-            <Field label="Club Role">
-              <select
-                name="clubRole"
-                value={form.clubRole}
-                onChange={handleChange}
-                disabled={form.club === "none"}
-                className={`${inputClass} ${form.club === "none" ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-            </Field>
+                <Field label="Club Role">
+                  <select
+                    name="clubRole"
+                    value={form.clubRole}
+                    onChange={handleChange}
+                    disabled={form.club === "none"}
+                    className={`${inputClass} ${form.club === "none" ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </Field>
+              </>
+            )}
 
           </div>
 

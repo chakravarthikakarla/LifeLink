@@ -21,6 +21,7 @@ import MemberProfile from "./pages/MemberProfile";
 import ClubDonations from "./pages/ClubDonations";
 import Achievements from "./pages/Achievements";
 import MasterAdminDashboard from "./pages/MasterAdminDashboard";
+import AdminRequestHandler from "./pages/AdminRequestHandler";
 
 function App() {
   return (
@@ -123,6 +124,7 @@ function App() {
       <Route path="/register" element={<MainLayout><Register /></MainLayout>} />
       <Route path="/verify-otp" element={<MainLayout><VerifyOtp /></MainLayout>} />
       <Route path="/forgot-password" element={<MainLayout><ForgotPassword /></MainLayout>} />
+      <Route path="/admin-requests" element={<MainLayout><AdminRequestHandler /></MainLayout>} />
       </Routes>
     </>
   );

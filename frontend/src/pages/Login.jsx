@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -9,7 +9,8 @@ import axios from "../services/api";
 const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-    const location = useLocation();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,6 +30,12 @@ const Login = () => {
       login(res.data.token, res.data.user);
       toast.success("Welcome back!");
 
+      // Check for redirect parameter from query string (e.g., from email link)
+      const redirectParam = searchParams.get("redirect");
+      if (redirectParam) {
+        navigate(redirectParam, { replace: true });
+      } else {
+        // Fallback to existing redirect logic
         const from = location.state?.from;
         const destination = from ? (typeof from === "string" ? from : from.pathname) : null;
         if (destination && destination !== "/login" && destination !== "/register") {
@@ -38,6 +45,7 @@ const Login = () => {
         } else {
           navigate("/");
         }
+      }
 
     } catch (err) {
       toast.error(err.response?.data?.message || "Login failed");

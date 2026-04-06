@@ -1,5 +1,7 @@
 const User = require("../models/User");
+const sendEmail = require("../utils/sendEmail");
 const { isWithinCooldown } = require("../utils/cooldown");
+const MASTER_ADMIN_EMAIL = process.env.MASTER_ADMIN_EMAIL || "debateverse80@gmail.com";
 
 const getUserProfile = async (req, res) => {
   try {
@@ -40,11 +42,13 @@ const updateUserProfile = async (req, res) => {
     user.profile.pincode = req.body.pincode ?? user.profile.pincode;
     user.profile.club = req.body.club ?? user.profile.club;
     
+    const isRequestingAdminRole = req.body.clubRole === "admin" && user.profile.clubRole !== "admin" && user.email !== MASTER_ADMIN_EMAIL;
+
     // admin approval logic
     if (req.body.clubRole === "admin" && user.profile.clubRole !== "admin") {
       // If user is requesting to become an admin, set approval to false
       // Unless they are the master admin
-      if (user.email !== "admin@lifelink.com") {
+      if (user.email !== MASTER_ADMIN_EMAIL) {
         user.profile.isAdminApproved = false;
       } else {
         user.profile.isAdminApproved = true;
@@ -55,6 +59,7 @@ const updateUserProfile = async (req, res) => {
     if (req.body.availableToDonate !== undefined) {
       user.profile.availableToDonate = req.body.availableToDonate;
     }
+
     if (req.body.lastDonationDate) {
       user.profile.lastDonationDate = new Date(req.body.lastDonationDate);
     }
@@ -95,6 +100,33 @@ const updateUserProfile = async (req, res) => {
     user.profileCompleted = !!profileCompleted;
 
     await user.save();
+
+    if (isRequestingAdminRole) {
+      const frontendURL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+      const viewAndRespondLink = `${frontendURL}/admin-requests?viewRequestId=${user._id}`;
+      
+      const adminRequestEmailHtml = `
+        <div style="font-family: Arial, sans-serif; line-height:1.6; max-width:600px; margin:auto; border:1px solid #eee; padding:20px; border-radius:10px;">
+          <h2 style="color:#6a0026; text-align:center;">New Admin Role Request</h2>
+          <p>Master Admin,</p>
+          <p><strong>${user.profile?.name || user.email}</strong> has requested admin access for club <strong>${user.profile?.club || "N/A"}</strong> on LifeLink.</p>
+          <p>Please review and approve or reject this request from the Master Admin dashboard.</p>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:30px 0;">
+            <tr>
+              <td align="center">
+                <a href="${viewAndRespondLink}" target="_blank" rel="noopener noreferrer" style="display:inline-block; background-color:#6a0026; color:white; padding:14px 28px; text-decoration:none; border-radius:8px; font-weight:600; font-size:16px;">View & Respond</a>
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:14px; color:#444;">If the button does not appear, use this link:</p>
+          <p style="word-break:break-all; font-size:14px; color:#1a0dab;"><a href="${viewAndRespondLink}" target="_blank" rel="noopener noreferrer" style="color:#1a0dab; text-decoration:underline;">${viewAndRespondLink}</a></p>
+          <p style="color:#666; font-size:12px;">If you're not the Master Admin or didn't expect this email, please ignore it.</p>
+          <p>Best regards,<br/><strong>The LifeLink Team</strong></p>
+        </div>
+      `;
+
+      await sendEmail(MASTER_ADMIN_EMAIL, "LifeLink - New Admin Role Request", adminRequestEmailHtml);
+    }
 
     res.status(200).json({
       message: "Profile updated successfully",

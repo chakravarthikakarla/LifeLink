@@ -18,7 +18,7 @@ const seedMasterAdmin = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB Connected");
 
-    const email = "admin@lifelink.com";
+    const email = "debateverse80@gmail.com";
     const password = "admin123";
 
     const existingUser = await User.findOne({ email });

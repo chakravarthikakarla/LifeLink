@@ -102,7 +102,9 @@ const Navbar = () => {
         {isLoggedIn && <NavLink to="/achievements" className={navLinkClass}>Hall of Fame</NavLink>}
         <NavLink 
           to={
-            ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
+            user?.email === "debateverse80@gmail.com"
+            ? "/dashboard"
+            : ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
             ? "/admin-dashboard/profile" 
             : "/dashboard"
           } 
@@ -110,7 +112,7 @@ const Navbar = () => {
         >
           Profile
         </NavLink>
-        {user?.email === "admin@lifelink.com" && (
+        {user?.email === "debateverse80@gmail.com" && (
           <NavLink to="/master-admin" className={navLinkClass}>Admin Panel</NavLink>
         )}
       </ul>
@@ -180,7 +182,9 @@ const Navbar = () => {
           {isLoggedIn && <NavLink to="/achievements" onClick={() => setMobileMenu(false)} className={navLinkClass}>Hall of Fame</NavLink>}
           <NavLink 
             to={
-              ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
+              user?.email === "debateverse80@gmail.com"
+              ? "/dashboard"
+              : ((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") 
               ? "/admin-dashboard/profile" 
               : "/dashboard"
             } 
@@ -189,7 +193,7 @@ const Navbar = () => {
           >
             Profile
           </NavLink>
-          {user?.email === "admin@lifelink.com" && (
+          {user?.email === "debateverse80@gmail.com" && (
             <NavLink to="/master-admin" onClick={() => setMobileMenu(false)} className={navLinkClass}>Admin Panel</NavLink>
           )}
           {((user?.profile?.clubRole?.toLowerCase() === "admin" && user?.profile?.isAdminApproved) || user?.role === "admin") && (
